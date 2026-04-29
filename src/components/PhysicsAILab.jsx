@@ -265,6 +265,7 @@ export default function PhysicsAILab() {
                   setup={setup}
                   inertiaData={inertiaData}
                   onHover={setHoverPhysics}
+                  trackWidth={trackWidth}
                 />
                 {/* Overlay Status */}
                 <div className="absolute top-3 left-3 bg-slate-900/85 backdrop-blur border border-slate-700 p-3 rounded-lg shadow-lg pointer-events-none">

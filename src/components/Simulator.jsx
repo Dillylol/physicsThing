@@ -9,7 +9,7 @@ import { computePhysicsAt } from '../physics/engine';
  * - Force arrows
  * - Mouse hover energy tooltips (HTML overlay)
  */
-export default function Simulator({ track, simState, setup, inertiaData, onHover }) {
+export default function Simulator({ track, simState, setup, inertiaData, onHover, trackWidth }) {
   const mountRef = useRef(null);
   const sceneRef = useRef({});
   const camState = useRef({ isDragging: false, prevX: 0, prevY: 0, theta: Math.PI / 4, phi: Math.PI / 3, distance: 25 });
@@ -127,7 +127,7 @@ export default function Simulator({ track, simState, setup, inertiaData, onHover
 
     const pts = track.points;
     const thickness = track.rampThickness || 0.3;
-    const halfW = 2; // half-width in Z
+    const halfW = trackWidth === 'thin' ? 0.5 : 2; // half-width in Z
 
     // Build track as extruded shape along the path
     const trackMat = new THREE.MeshStandardMaterial({
@@ -235,7 +235,7 @@ export default function Simulator({ track, simState, setup, inertiaData, onHover
         }
       }
     }
-  }, [track]);
+  }, [track, trackWidth]);
 
   // --- BUILD/UPDATE OBJECT MESH ---
   useEffect(() => {
