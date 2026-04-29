@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Play, Pause, RotateCcw, Activity, Calculator, Waypoints, Zap, FastForward } from 'lucide-react';
+import { Play, Pause, RotateCcw, Activity, Calculator, Waypoints, Zap, FastForward, BrainCircuit } from 'lucide-react';
 import { buildInertiaFromSetup, SHAPES } from '../physics/inertia';
 import { buildTrack, DEFAULT_SEGMENTS } from '../physics/trackBuilder';
 import { stepSimulation, G } from '../physics/engine';
@@ -7,6 +7,7 @@ import Simulator from './Simulator';
 import LabSetup from './LabSetup';
 import TrackEditor from './TrackEditor';
 import EquationsPanel from './EquationsPanel';
+import AIAssistant from './AIAssistant';
 
 /**
  * Main Physics Lab Application.
@@ -21,17 +22,18 @@ export default function PhysicsAILab() {
     friction: 0.8,
     showForces: true,
     isCompound: false,
-    innerShape: 'solid_disk',
-    innerMass: 1,
-    innerRadius: 0.15,
-    outerShape: 'hoop',
-    outerMass: 2,
-    outerRadius: 0.5,
+    centerShape: 'solid_disk',
+    centerMass: 2,
+    centerRadius: 0.5,
+    sideShape: 'hoop',
+    sideMass: 1,
+    sideRadius: 0.3,
+    rollsOnInner: false,
   });
 
   // --- TRACK STATE ---
   const [segments, setSegments] = useState([...DEFAULT_SEGMENTS]);
-  const [rampThickness, setRampThickness] = useState(0.3);
+  const [trackWidth, setTrackWidth] = useState('normal'); // 'normal' | 'thin'
 
   // --- SIMULATION STATE ---
   const [simState, setSimState] = useState({
@@ -55,7 +57,8 @@ export default function PhysicsAILab() {
 
   // --- COMPUTED DATA ---
   const inertiaData = useMemo(() => buildInertiaFromSetup(setup), [setup]);
-  const track = useMemo(() => buildTrack(segments, rampThickness), [segments, rampThickness]);
+  const trackThickness = trackWidth === 'thin' ? 0.1 : 0.3;
+  const track = useMemo(() => buildTrack(segments, trackThickness), [segments, trackThickness]);
 
   // --- RESET ---
   const resetSim = useCallback(() => {
@@ -80,7 +83,12 @@ export default function PhysicsAILab() {
   }, [track, inertiaData]);
 
   // Reset when setup or track changes
-  useEffect(() => { resetSim(); }, [setup, segments, rampThickness, resetSim]);
+  // Sync rollsOnInner with trackWidth
+  useEffect(() => {
+    setSetup(prev => ({ ...prev, rollsOnInner: trackWidth === 'thin' }));
+  }, [trackWidth]);
+
+  useEffect(() => { resetSim(); }, [setup, segments, trackWidth, resetSim]);
 
   // --- ANIMATION LOOP ---
   const animate = useCallback((timestamp) => {
@@ -177,6 +185,16 @@ export default function PhysicsAILab() {
             >
               <Calculator className="w-4 h-4 mr-1.5" /> Equations
             </button>
+            <button
+              onClick={() => setActiveTab('ai')}
+              className={`flex items-center px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                activeTab === 'ai'
+                  ? 'bg-slate-800 text-fuchsia-400 shadow-md'
+                  : 'text-slate-400 hover:text-slate-300'
+              }`}
+            >
+              <BrainCircuit className="w-4 h-4 mr-1.5" /> AI
+            </button>
           </div>
         </div>
       </header>
@@ -189,8 +207,8 @@ export default function PhysicsAILab() {
             <TrackEditor
               segments={segments}
               onSegmentsChange={setSegments}
-              rampThickness={rampThickness}
-              onThicknessChange={setRampThickness}
+              trackWidth={trackWidth}
+              onWidthChange={setTrackWidth}
             />
           </div>
 
@@ -337,6 +355,13 @@ export default function PhysicsAILab() {
                 simState={simState}
                 inertiaData={inertiaData}
                 setup={setup}
+                track={track}
+              />
+            ) : activeTab === 'ai' ? (
+              <AIAssistant
+                setup={setup}
+                inertiaData={inertiaData}
+                simState={simState}
                 track={track}
               />
             ) : (

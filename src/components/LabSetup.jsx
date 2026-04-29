@@ -1,10 +1,11 @@
 import React from 'react';
-import { SHAPES } from '../physics/inertia';
+import { SHAPES, COMPOUND_SHAPES } from '../physics/inertia';
 import { Settings2, Check, Layers } from 'lucide-react';
 
 /**
  * Lab Setup Panel — Configure object type, mass, radius, friction.
- * Supports compound inertia mode for hoop and disk.
+ * Supports compound inertia mode (hoop/disk only) with center + 2 side objects.
+ * Compound can be yoyo (sides smaller) or wheel (sides larger).
  */
 export default function LabSetup({ setup, onChange }) {
   const handleChange = (key, value) => onChange({ ...setup, [key]: value });
@@ -57,7 +58,7 @@ export default function LabSetup({ setup, onChange }) {
             </span>
           </label>
           <p className="text-[10px] text-slate-600 mt-1 ml-7">
-            Inner object between two outer objects (Hoop/Disk only)
+            3-part system: center + 2 side objects (Hoop/Disk only)
           </p>
         </div>
 
@@ -86,37 +87,82 @@ export default function LabSetup({ setup, onChange }) {
         {/* Compound object controls */}
         {setup.isCompound && (
           <div className="space-y-3 p-3 bg-fuchsia-950/20 border border-fuchsia-500/20 rounded-lg">
-            <h4 className="text-xs font-semibold text-fuchsia-400 uppercase tracking-wider">Inner Object</h4>
+            {/* Center Object */}
+            <h4 className="text-xs font-semibold text-fuchsia-400 uppercase tracking-wider">Center Object</h4>
             <div className="flex gap-2">
-              {['solid_disk', 'hoop'].map(key => (
-                <button key={key} onClick={() => handleChange('innerShape', key)}
+              {Object.keys(COMPOUND_SHAPES).map(key => (
+                <button key={key} onClick={() => handleChange('centerShape', key)}
                   className={`flex-1 text-xs px-2 py-1.5 rounded border transition-all ${
-                    setup.innerShape === key
+                    setup.centerShape === key
                       ? 'border-fuchsia-500 bg-fuchsia-500/20 text-fuchsia-300'
                       : 'border-slate-700 text-slate-400 hover:border-slate-600'
                   }`}>
-                  {SHAPES[key].name}
+                  {COMPOUND_SHAPES[key].name}
                 </button>
               ))}
             </div>
-            <SliderControl label="Inner Mass" value={setup.innerMass || 1} min={0.1} max={10} step={0.1} unit="kg" color="fuchsia" onChange={(v) => handleChange('innerMass', v)} />
-            <SliderControl label="Inner Radius" value={setup.innerRadius || 0.2} min={0.05} max={1.0} step={0.05} unit="m" color="fuchsia" onChange={(v) => handleChange('innerRadius', v)} />
+            <SliderControl label="Center Mass" value={setup.centerMass || 2} min={0.1} max={10} step={0.1} unit="kg" color="fuchsia" onChange={(v) => handleChange('centerMass', v)} />
+            <SliderControl label="Center Radius" value={setup.centerRadius || 0.5} min={0.1} max={2.0} step={0.05} unit="m" color="fuchsia" onChange={(v) => handleChange('centerRadius', v)} />
 
-            <h4 className="text-xs font-semibold text-amber-400 uppercase tracking-wider mt-3">Outer Objects (×2)</h4>
+            {/* Side Objects */}
+            <h4 className="text-xs font-semibold text-amber-400 uppercase tracking-wider mt-3">Side Objects (×2)</h4>
             <div className="flex gap-2">
-              {['solid_disk', 'hoop'].map(key => (
-                <button key={key} onClick={() => handleChange('outerShape', key)}
+              {Object.keys(COMPOUND_SHAPES).map(key => (
+                <button key={key} onClick={() => handleChange('sideShape', key)}
                   className={`flex-1 text-xs px-2 py-1.5 rounded border transition-all ${
-                    setup.outerShape === key
+                    setup.sideShape === key
                       ? 'border-amber-500 bg-amber-500/20 text-amber-300'
                       : 'border-slate-700 text-slate-400 hover:border-slate-600'
                   }`}>
-                  {SHAPES[key].name}
+                  {COMPOUND_SHAPES[key].name}
                 </button>
               ))}
             </div>
-            <SliderControl label="Each Outer Mass" value={setup.outerMass || 2} min={0.1} max={10} step={0.1} unit="kg" color="amber" onChange={(v) => handleChange('outerMass', v)} />
-            <SliderControl label="Outer Radius" value={setup.outerRadius || 0.5} min={0.2} max={2.0} step={0.05} unit="m" color="amber" onChange={(v) => handleChange('outerRadius', v)} />
+            <SliderControl label="Each Side Mass" value={setup.sideMass || 1} min={0.1} max={10} step={0.1} unit="kg" color="amber" onChange={(v) => handleChange('sideMass', v)} />
+            <SliderControl label="Side Radius" value={setup.sideRadius || 0.3} min={0.05} max={2.0} step={0.05} unit="m" color="amber" onChange={(v) => handleChange('sideRadius', v)} />
+
+            {/* Shape Preview Label */}
+            <div className={`mt-2 text-[11px] font-bold py-1.5 px-3 rounded flex items-center justify-center border ${
+              (setup.sideRadius || 0.3) < (setup.centerRadius || 0.5)
+                ? 'bg-fuchsia-500/10 text-fuchsia-400 border-fuchsia-500/30'
+                : 'bg-amber-500/10 text-amber-400 border-amber-500/30'
+            }`}>
+              {(setup.sideRadius || 0.3) < (setup.centerRadius || 0.5) ? '🪀 Yoyo Configuration' : '⚙ Wheel Configuration'}
+            </div>
+
+            {/* Rolling Surface Toggle */}
+            <div className="mt-2 p-2 bg-slate-950 rounded-lg border border-slate-800">
+              <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-2 block">
+                Rolling Contact
+              </label>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => handleChange('rollsOnInner', false)}
+                  className={`flex-1 text-xs px-2 py-1.5 rounded border transition-all ${
+                    !setup.rollsOnInner
+                      ? 'border-emerald-500 bg-emerald-500/20 text-emerald-300'
+                      : 'border-slate-700 text-slate-400 hover:border-slate-600'
+                  }`}
+                >
+                  Larger radius rolls
+                </button>
+                <button
+                  onClick={() => handleChange('rollsOnInner', true)}
+                  className={`flex-1 text-xs px-2 py-1.5 rounded border transition-all ${
+                    setup.rollsOnInner
+                      ? 'border-emerald-500 bg-emerald-500/20 text-emerald-300'
+                      : 'border-slate-700 text-slate-400 hover:border-slate-600'
+                  }`}
+                >
+                  Smaller radius rolls
+                </button>
+              </div>
+              <p className="text-[10px] text-slate-600 mt-1">
+                {setup.rollsOnInner
+                  ? 'Thin track — smaller part contacts the surface'
+                  : 'Normal track — larger part contacts the surface'}
+              </p>
+            </div>
           </div>
         )}
 

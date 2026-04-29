@@ -1,9 +1,11 @@
 /**
  * Inertia calculation module for single and compound objects.
- * Supports Solid Disk and Hollow Hoop, both single and compound (system) configurations.
  * 
- * Compound system: A smaller inner radius object sandwiched between two larger outer objects.
- * Example: A small inner disk between two larger outer hoops, all sharing the same axis.
+ * Single mode: Solid Disk, Hollow Hoop, Solid Sphere, Hollow Sphere
+ * Compound mode (Hoop/Disk only): 3-part coaxial system — center object + 2 side objects.
+ *   - If side objects are larger → "wheel" shape (center hub with outer flanges)
+ *   - If side objects are smaller → "yoyo" shape (large center, small side pieces)
+ *   - rollsOnInner: determines whether the center or the sides contact the track
  */
 
 // Shape definitions with inertia coefficients
@@ -22,6 +24,34 @@ export const SHAPES = {
     desc: 'I = mR²',
     inertiaFormula: (m, r) => m * r * r,
   },
+  solid_hoop: {
+    name: 'Solid Hoop',
+    c: 1.0,
+    color: '#f97316',
+    desc: 'I = mR²',
+    inertiaFormula: (m, r) => m * r * r,
+  },
+  solid_sphere: {
+    name: 'Solid Sphere',
+    c: 0.4,
+    color: '#10b981',
+    desc: 'I = ⅖mR²',
+    inertiaFormula: (m, r) => 0.4 * m * r * r,
+  },
+  hollow_sphere: {
+    name: 'Hollow Sphere',
+    c: 2 / 3,
+    color: '#f59e0b',
+    desc: 'I = ⅔mR²',
+    inertiaFormula: (m, r) => (2 / 3) * m * r * r,
+  },
+};
+
+// Only disk and hoop are allowed for compound systems
+export const COMPOUND_SHAPES = {
+  solid_disk: SHAPES.solid_disk,
+  hoop: SHAPES.hoop,
+  solid_hoop: SHAPES.solid_hoop,
 };
 
 /**
@@ -35,32 +65,50 @@ export function singleInertia(shapeKey, mass, radius) {
 
 /**
  * Calculate total inertia for a compound system.
- * System: 1 inner object + 2 outer objects, coaxial.
+ * System: 1 center object + 2 side objects, coaxial.
  * 
- * @param {string} innerShapeKey - 'solid_disk' or 'hoop'
- * @param {number} innerMass - mass of the inner object (kg)
- * @param {number} innerRadius - radius of the inner object (m)
- * @param {string} outerShapeKey - 'solid_disk' or 'hoop'
- * @param {number} outerMass - mass of each outer object (kg)
- * @param {number} outerRadius - radius of each outer object (m)
- * @returns {{ totalInertia: number, totalMass: number, innerI: number, outerI: number, parts: object[] }}
+ * @param {string} centerShapeKey - 'solid_disk' or 'hoop'
+ * @param {number} centerMass - mass of the center object (kg)
+ * @param {number} centerRadius - radius of the center object (m)
+ * @param {string} sideShapeKey - 'solid_disk' or 'hoop'
+ * @param {number} sideMass - mass of each side object (kg)
+ * @param {number} sideRadius - radius of each side object (m)
+ * @param {boolean} rollsOnInner - if true, the smaller radius contacts the track (thin track mode)
  */
-export function compoundInertia(innerShapeKey, innerMass, innerRadius, outerShapeKey, outerMass, outerRadius) {
-  const innerI = singleInertia(innerShapeKey, innerMass, innerRadius);
-  const outerI = singleInertia(outerShapeKey, outerMass, outerRadius);
-  const totalInertia = innerI + 2 * outerI;
-  const totalMass = innerMass + 2 * outerMass;
+export function compoundInertia(centerShapeKey, centerMass, centerRadius, sideShapeKey, sideMass, sideRadius, rollsOnInner = false) {
+  const centerI = singleInertia(centerShapeKey, centerMass, centerRadius);
+  const sideI = singleInertia(sideShapeKey, sideMass, sideRadius);
+  const totalInertia = centerI + 2 * sideI;
+  const totalMass = centerMass + 2 * sideMass;
+
+  // Determine which radius contacts the track
+  const maxR = Math.max(centerRadius, sideRadius);
+  const minR = Math.min(centerRadius, sideRadius);
+  let rollRadius;
+
+  if (rollsOnInner) {
+    // Thin track: the smaller radius rolls (e.g., yoyo rolling on its axle)
+    rollRadius = minR;
+  } else {
+    // Normal track: the larger radius rolls
+    rollRadius = maxR;
+  }
+
+  const isYoyo = sideRadius < centerRadius; // sides smaller than center
 
   return {
     totalInertia,
     totalMass,
-    innerI,
-    outerI,
-    effectiveC: totalInertia / (totalMass * outerRadius * outerRadius), // effective c for rolling
-    rollRadius: outerRadius, // the outer radius is what contacts the surface
+    centerI,
+    sideI,
+    effectiveC: totalInertia / (totalMass * rollRadius * rollRadius),
+    rollRadius,
+    centerRadius,
+    sideRadius,
+    isYoyo,
     parts: [
-      { name: `Inner ${SHAPES[innerShapeKey].name}`, I: innerI, mass: innerMass, radius: innerRadius, shape: innerShapeKey },
-      { name: `Outer ${SHAPES[outerShapeKey].name} ×2`, I: 2 * outerI, mass: 2 * outerMass, radius: outerRadius, shape: outerShapeKey },
+      { name: `Center ${COMPOUND_SHAPES[centerShapeKey]?.name || centerShapeKey}`, I: centerI, mass: centerMass, radius: centerRadius, shape: centerShapeKey },
+      { name: `Side ${COMPOUND_SHAPES[sideShapeKey]?.name || sideShapeKey} ×2`, I: 2 * sideI, mass: 2 * sideMass, radius: sideRadius, shape: sideShapeKey },
     ],
   };
 }
@@ -72,26 +120,31 @@ export function compoundInertia(innerShapeKey, innerMass, innerRadius, outerShap
 export function buildInertiaFromSetup(setup) {
   if (setup.isCompound) {
     const result = compoundInertia(
-      setup.innerShape, setup.innerMass, setup.innerRadius,
-      setup.outerShape, setup.outerMass, setup.outerRadius
+      setup.centerShape, setup.centerMass, setup.centerRadius,
+      setup.sideShape, setup.sideMass, setup.sideRadius,
+      setup.rollsOnInner
     );
     return {
       totalInertia: result.totalInertia,
       totalMass: result.totalMass,
       effectiveC: result.effectiveC,
       rollRadius: result.rollRadius,
+      centerRadius: result.centerRadius,
+      sideRadius: result.sideRadius,
+      isYoyo: result.isYoyo,
       parts: result.parts,
       isCompound: true,
+      rollsOnInner: setup.rollsOnInner,
     };
   } else {
     const I = singleInertia(setup.shapeKey, setup.mass, setup.radius);
-    const c = SHAPES[setup.shapeKey].c;
+    const c = SHAPES[setup.shapeKey]?.c || 0.5;
     return {
       totalInertia: I,
       totalMass: setup.mass,
       effectiveC: c,
       rollRadius: setup.radius,
-      parts: [{ name: SHAPES[setup.shapeKey].name, I, mass: setup.mass, radius: setup.radius, shape: setup.shapeKey }],
+      parts: [{ name: SHAPES[setup.shapeKey]?.name || setup.shapeKey, I, mass: setup.mass, radius: setup.radius, shape: setup.shapeKey }],
       isCompound: false,
     };
   }

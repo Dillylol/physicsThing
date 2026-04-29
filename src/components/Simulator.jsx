@@ -77,7 +77,8 @@ export default function Simulator({ track, simState, setup, inertiaData, onHover
     const onMouseUp = () => { camState.current.isDragging = false; };
     const onMouseMove = (e) => {
       if (!camState.current.isDragging) return;
-      camState.current.theta -= (e.clientX - camState.current.prevX) * 0.008;
+      // Reversed left/right: += instead of -=
+      camState.current.theta += (e.clientX - camState.current.prevX) * 0.008;
       camState.current.phi = Math.max(0.1, Math.min(Math.PI - 0.1,
         camState.current.phi - (e.clientY - camState.current.prevY) * 0.008));
       camState.current.prevX = e.clientX;
@@ -251,59 +252,90 @@ export default function Simulator({ track, simState, setup, inertiaData, onHover
     const R = inertiaData.rollRadius;
 
     if (inertiaData.isCompound) {
-      // Outer rings/disks
-      const outerR = inertiaData.rollRadius;
-      const innerR = setup.innerRadius || outerR * 0.3;
+      const centerR = setup.centerRadius || 0.5;
+      const sideR = setup.sideRadius || 0.3;
+      const isYoyo = sideR < centerR;
+      const maxR = Math.max(centerR, sideR);
+      const sideThickness = 0.3;
+      const centerThickness = 0.6;
+      // Z offset: sides sit on each side of the center
+      const sideZ = centerThickness / 2 + sideThickness / 2;
 
-      if (setup.outerShape === 'hoop') {
-        const torus = new THREE.Mesh(
-          new THREE.TorusGeometry(outerR, Math.min(0.15, outerR * 0.2), 16, 48),
-          new THREE.MeshStandardMaterial({ color: 0xef4444, roughness: 0.3, metalness: 0.5 })
+      // Center object (fuchsia/blue)
+      if (setup.centerShape === 'hoop') {
+        const centerMesh = new THREE.Mesh(
+          new THREE.TorusGeometry(centerR, Math.min(0.12, centerR * 0.25), 16, 48),
+          new THREE.MeshStandardMaterial({ color: 0xa855f7, roughness: 0.3, metalness: 0.5 })
         );
-        objGroup.add(torus);
+        objGroup.add(centerMesh);
       } else {
-        const disk = new THREE.Mesh(
-          new THREE.CylinderGeometry(outerR, outerR, 1.5, 32).rotateX(Math.PI / 2),
-          new THREE.MeshStandardMaterial({ color: 0xef4444, roughness: 0.3, metalness: 0.4, transparent: true, opacity: 0.7 })
+        const centerMesh = new THREE.Mesh(
+          new THREE.CylinderGeometry(centerR, centerR, centerThickness, 32).rotateX(Math.PI / 2),
+          new THREE.MeshStandardMaterial({ color: 0xa855f7, roughness: 0.3, metalness: 0.4 })
         );
-        objGroup.add(disk);
+        objGroup.add(centerMesh);
       }
 
-      if (setup.innerShape === 'hoop') {
-        const innerTorus = new THREE.Mesh(
-          new THREE.TorusGeometry(innerR, Math.min(0.08, innerR * 0.3), 12, 32),
-          new THREE.MeshStandardMaterial({ color: 0x3b82f6, roughness: 0.3, metalness: 0.5 })
-        );
-        objGroup.add(innerTorus);
-      } else {
-        const innerDisk = new THREE.Mesh(
-          new THREE.CylinderGeometry(innerR, innerR, 1.8, 24).rotateX(Math.PI / 2),
-          new THREE.MeshStandardMaterial({ color: 0x3b82f6, roughness: 0.3, metalness: 0.4 })
-        );
-        objGroup.add(innerDisk);
+      // Side objects (amber) — two copies at +Z and -Z
+      for (const zSign of [-1, 1]) {
+        if (setup.sideShape === 'hoop') {
+          const sideMesh = new THREE.Mesh(
+            new THREE.TorusGeometry(sideR, Math.min(0.08, sideR * 0.25), 12, 40),
+            new THREE.MeshStandardMaterial({ color: 0xf59e0b, roughness: 0.3, metalness: 0.5 })
+          );
+          sideMesh.position.z = zSign * sideZ;
+          objGroup.add(sideMesh);
+        } else {
+          const sideMesh = new THREE.Mesh(
+            new THREE.CylinderGeometry(sideR, sideR, sideThickness, 32).rotateX(Math.PI / 2),
+            new THREE.MeshStandardMaterial({ color: 0xf59e0b, roughness: 0.3, metalness: 0.4 })
+          );
+          sideMesh.position.z = zSign * sideZ;
+          objGroup.add(sideMesh);
+        }
       }
 
-      // Axle
+      // Axle connecting all three parts
+      const axleLen = 2 * sideZ + sideThickness;
       const axle = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.05, 0.05, 2.2, 8).rotateX(Math.PI / 2),
-        new THREE.MeshStandardMaterial({ color: 0x94a3b8 })
+        new THREE.CylinderGeometry(0.04, 0.04, axleLen, 8).rotateX(Math.PI / 2),
+        new THREE.MeshStandardMaterial({ color: 0x94a3b8, metalness: 0.6 })
       );
       objGroup.add(axle);
     } else {
       // Single object
-      const isHoop = setup.shapeKey === 'hoop';
-      let geom;
-      if (isHoop) {
-        geom = new THREE.TorusGeometry(R, Math.min(0.2, R * 0.3), 16, 64);
-      } else {
-        geom = new THREE.CylinderGeometry(R, R, 2, 32).rotateX(Math.PI / 2);
+      const shapeKey = setup.shapeKey;
+      let geom, color, wireframe = false, transparent = false, opacity = 1;
+
+      switch (shapeKey) {
+        case 'hoop':
+          geom = new THREE.TorusGeometry(R, Math.min(0.2, R * 0.3), 16, 64);
+          color = 0xef4444;
+          wireframe = true; transparent = true; opacity = 0.6;
+          break;
+        case 'solid_hoop':
+          geom = new THREE.TorusGeometry(R, Math.min(0.25, R * 0.35), 24, 64);
+          color = 0xf97316;
+          break;
+        case 'solid_sphere':
+          geom = new THREE.SphereGeometry(R, 32, 32);
+          color = 0x10b981;
+          break;
+        case 'hollow_sphere':
+          geom = new THREE.SphereGeometry(R, 32, 32);
+          color = 0xf59e0b;
+          wireframe = true; transparent = true; opacity = 0.4;
+          break;
+        case 'solid_disk':
+        default:
+          geom = new THREE.CylinderGeometry(R, R, 2, 32).rotateX(Math.PI / 2);
+          color = 0x3b82f6;
+          break;
       }
+
       const mat = new THREE.MeshStandardMaterial({
-        color: isHoop ? 0xef4444 : 0x3b82f6,
-        roughness: 0.3, metalness: 0.4,
-        wireframe: isHoop,
-        transparent: isHoop,
-        opacity: isHoop ? 0.6 : 1,
+        color, roughness: 0.3, metalness: 0.4,
+        wireframe, transparent, opacity,
       });
       const mesh = new THREE.Mesh(geom, mat);
       mesh.castShadow = true;
@@ -317,8 +349,8 @@ export default function Simulator({ track, simState, setup, inertiaData, onHover
     );
     indicator.name = 'rotIndicator';
     objGroup.add(indicator);
-  }, [setup.shapeKey, setup.isCompound, setup.innerShape, setup.outerShape,
-      setup.innerRadius, setup.outerRadius, inertiaData.rollRadius, inertiaData.isCompound]);
+  }, [setup.shapeKey, setup.isCompound, setup.centerShape, setup.sideShape,
+      setup.centerRadius, setup.sideRadius, inertiaData.rollRadius, inertiaData.isCompound]);
 
   // --- BUILD FORCE ARROWS ---
   useEffect(() => {

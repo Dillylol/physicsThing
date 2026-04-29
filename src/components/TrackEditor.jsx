@@ -5,9 +5,9 @@ import { segmentLabel } from '../physics/trackBuilder';
 /**
  * Track Editor Panel — Add, remove, reorder track segments.
  * Supports: Ramp, Flat, Loop, Ramp Up.
- * Includes ramp thickness control.
+ * Track Width is binary: Normal or Thin (for compound inner-rolling).
  */
-export default function TrackEditor({ segments, onSegmentsChange, rampThickness, onThicknessChange }) {
+export default function TrackEditor({ segments, onSegmentsChange, trackWidth, onWidthChange }) {
   const [addType, setAddType] = useState('ramp');
 
   const addSegment = () => {
@@ -45,22 +45,38 @@ export default function TrackEditor({ segments, onSegmentsChange, rampThickness,
         <Waypoints className="w-5 h-5 mr-2 text-emerald-400" /> Track Editor
       </h2>
 
-      {/* Ramp Thickness */}
+      {/* Track Width (Binary Toggle) */}
       <div className="mb-4 p-3 bg-slate-950 rounded-lg border border-slate-800">
-        <div className="flex items-center justify-between mb-1">
-          <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider flex items-center">
-            <Ruler className="w-3.5 h-3.5 mr-1" /> Track Thickness
-          </label>
-          <span className="text-xs font-mono text-emerald-400">{rampThickness.toFixed(2)} m</span>
+        <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider flex items-center mb-2">
+          <Ruler className="w-3.5 h-3.5 mr-1" /> Track Width
+        </label>
+        <div className="flex gap-2">
+          <button
+            onClick={() => onWidthChange('normal')}
+            className={`flex-1 text-sm px-3 py-2 rounded-lg border transition-all ${
+              trackWidth === 'normal'
+                ? 'border-emerald-500 bg-emerald-500/20 text-emerald-300 font-medium'
+                : 'border-slate-700 text-slate-400 hover:border-slate-600'
+            }`}
+          >
+            Normal
+          </button>
+          <button
+            onClick={() => onWidthChange('thin')}
+            className={`flex-1 text-sm px-3 py-2 rounded-lg border transition-all ${
+              trackWidth === 'thin'
+                ? 'border-amber-500 bg-amber-500/20 text-amber-300 font-medium'
+                : 'border-slate-700 text-slate-400 hover:border-slate-600'
+            }`}
+          >
+            Thin
+          </button>
         </div>
-        <input
-          type="range"
-          min={0.05} max={1.0} step={0.05}
-          value={rampThickness}
-          onChange={(e) => onThicknessChange(parseFloat(e.target.value))}
-          className="w-full accent-emerald-500"
-        />
-        <p className="text-[10px] text-slate-600 mt-1">Thinner tracks for small inner-radius objects</p>
+        <p className="text-[10px] text-slate-600 mt-1.5">
+          {trackWidth === 'thin'
+            ? 'Thin track — smaller object contacts the surface (e.g., yoyo axle)'
+            : 'Normal width — larger object contacts the surface'}
+        </p>
       </div>
 
       {/* Segment List */}
