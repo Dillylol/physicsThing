@@ -1,0 +1,583 @@
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { Play, Pause, RotateCcw, Settings2, Check, AlertTriangle, Calculator, BrainCircuit, Database, Activity, Timer } from 'lucide-react';
+
+const SHAPES = {
+  solid_disk: { name: 'Solid Disk', c: 0.5, color: 0x3b82f6, hex: '#3b82f6', desc: 'Average Inertia' },
+  hoop: { name: 'Hollow Hoop', c: 1.0, color: 0xef4444, hex: '#ef4444', desc: 'High Inertia' },
+  solid_sphere: { name: 'Solid Sphere', c: 0.4, color: 0x10b981, hex: '#10b981', desc: 'Low Inertia' },
+  hollow_sphere: { name: 'Hollow Sphere', c: 0.667, color: 0xf59e0b, hex: '#f59e0b', desc: 'Medium Inertia' },
+};
+
+export default function PhysicsAILab() {
+  const [threeLoaded, setThreeLoaded] = useState(false);
+
+  // --- 1. LAB SETUP (Inputs) ---
+  const [setup, setSetup] = useState({
+    shapeKey: 'solid_disk',
+    mass: 5,        // kg
+    radius: 0.5,    // m
+    angleDeg: 30,   // degrees
+    friction: 0.8,  // coefficient
+    showForces: true
+  });
+
+  // --- 2. SIMULATION STATE (Live Data) ---
+  const [sim, setSim] = useState({
+    isPlaying: false, time: 0, distance: 0, velocity: 0, omega: 0, theta_rot: 0,
+    pe: 0, ke_t: 0, ke_r: 0, total_e: 0, isSlipping: false,
+    finalTime: null
+  });
+
+  // --- 3. AI ASSISTANT STATE ---
+  const [aiMemory, setAiMemory] = useState([]);
+  const [aiPrediction, setAiPrediction] = useState({ time: null, velocity: null, slip: null, efficiency: null, confidence: 0 });
+  const [aiError, setAiError] = useState({ time: null });
+  const [isTraining, setIsTraining] = useState(false);
+
+  // Refs for rendering and animation
+  const mountRef = useRef(null);
+  const requestRef = useRef(null);
+  const prevTimeRef = useRef(null);
+  const sceneRefs = useRef({ scene: null, camera: null, renderer: null, rampGroup: null, objectGroup: null, arrows: {} });
+  const camState = useRef({ isDragging: false, prevX: 0, prevY: 0, theta: Math.PI / 4, phi: Math.PI / 3, distance: 25 });
+
+  const G = 9.81;
+  const RAMP_LENGTH = 15; 
+
+  // --- PHYSICS ENGINE (Deterministic Math) ---
+  const calculateFinalOutcomes = useCallback((m, r, ang, frict, shapeC) => {
+    const angleRad = (ang * Math.PI) / 180;
+    const muCrit = (shapeC / (1 + shapeC)) * Math.tan(angleRad);
+    const isSlipping = frict < muCrit;
+
+    let a;
+    if (isSlipping) {
+      a = G * (Math.sin(angleRad) - frict * Math.cos(angleRad));
+    } else {
+      a = (G * Math.sin(angleRad)) / (1 + shapeC);
+    }
+    a = Math.max(0.001, a);
+    
+    const finalTime = Math.sqrt((2 * RAMP_LENGTH) / a);
+    const initialHeight = RAMP_LENGTH * Math.sin(angleRad);
+    const initialEnergy = m * G * initialHeight;
+    const finalVelocity = a * finalTime;
+    
+    let alpha = isSlipping ? (frict * G * Math.cos(angleRad)) / (shapeC * r) : a / r;
+    const finalOmega = alpha * finalTime;
+    
+    const finalKeTrans = 0.5 * m * finalVelocity * finalVelocity;
+    const finalKeRot = 0.5 * (shapeC * m * r * r) * finalOmega * finalOmega;
+    const finalMechEnergy = finalKeTrans + finalKeRot;
+    const efficiency = initialEnergy > 0 ? finalMechEnergy / initialEnergy : 1;
+
+    return { finalTime, finalVelocity, finalOmega, isSlipping, initialEnergy, efficiency };
+  }, []);
+
+  // --- AI ASSISTANT LOGIC ---
+  const trainAI = () => {
+    setIsTraining(true);
+    setTimeout(() => {
+      const memory = [];
+      const keys = Object.keys(SHAPES);
+      
+      // Stratified sampling: sweep parameter grid then add random noise samples
+      const mSteps = [1, 5, 10, 15, 20];
+      const rSteps = [0.5, 1.0, 1.5, 2.0];
+      const angSteps = [5, 15, 25, 35, 45, 55];
+      const fSteps = [0.0, 0.25, 0.5, 0.75, 1.0];
+      
+      for (const m of mSteps) {
+        for (const ang of angSteps) {
+          for (const frict of fSteps) {
+            for (const shape of keys) {
+              const r = rSteps[Math.floor(Math.random() * rSteps.length)];
+              const c = SHAPES[shape].c;
+              const outcomes = calculateFinalOutcomes(m, r, ang, frict, c);
+              memory.push({ conditions: [m, r, ang, frict, c], outcomes });
+            }
+          }
+        }
+      }
+      // Add random noise samples to fill gaps
+      for (let i = 0; i < 500; i++) {
+        const m = Math.random() * 19 + 1;
+        const r = Math.random() * 1.5 + 0.5;
+        const ang = Math.random() * 55 + 5;
+        const frict = Math.random();
+        const shape = keys[Math.floor(Math.random() * keys.length)];
+        const c = SHAPES[shape].c;
+        const outcomes = calculateFinalOutcomes(m, r, ang, frict, c);
+        memory.push({ conditions: [m, r, ang, frict, c], outcomes });
+      }
+      setAiMemory(memory);
+      setIsTraining(false);
+    }, 600);
+  };
+
+  const updatePredictions = useCallback(() => {
+    if (aiMemory.length === 0) return;
+
+    const bounds = [{min: 1, max: 20}, {min: 0.5, max: 2}, {min: 5, max: 60}, {min: 0, max: 1}, {min: 0.4, max: 1.0}];
+    // Feature importance weights: angle and shape matter most
+    const featureWeights = [0.6, 0.8, 1.5, 1.2, 1.4];
+    const currentShapeC = SHAPES[setup.shapeKey].c;
+    const currentConditions = [setup.mass, setup.radius, setup.angleDeg, setup.friction, currentShapeC];
+    
+    const normalize = (val, i) => (val - bounds[i].min) / (bounds[i].max - bounds[i].min);
+    const normCurrent = currentConditions.map(normalize);
+
+    // Weighted Euclidean distance
+    const similarities = aiMemory.map(exp => {
+      const normExp = exp.conditions.map(normalize);
+      const dist = Math.sqrt(normCurrent.reduce((sum, val, i) => sum + featureWeights[i] * Math.pow(val - normExp[i], 2), 0));
+      return { dist, outcomes: exp.outcomes };
+    });
+
+    similarities.sort((a, b) => a.dist - b.dist);
+    const K = 12;
+    const topK = similarities.slice(0, K);
+    
+    // Gaussian kernel weighting: closer neighbors matter exponentially more
+    const bandwidth = Math.max(0.01, topK[K - 1].dist * 0.5);
+    const weights = topK.map(s => Math.exp(-(s.dist * s.dist) / (2 * bandwidth * bandwidth)));
+    const wSum = weights.reduce((a, b) => a + b, 0);
+    const w = weights.map(v => v / wSum);
+
+    const avgTime = topK.reduce((sum, s, i) => sum + w[i] * s.outcomes.finalTime, 0);
+    const avgVel = topK.reduce((sum, s, i) => sum + w[i] * s.outcomes.finalVelocity, 0);
+    const avgEff = topK.reduce((sum, s, i) => sum + w[i] * s.outcomes.efficiency, 0);
+    const slipVotes = topK.reduce((sum, s, i) => sum + w[i] * (s.outcomes.isSlipping ? 1 : 0), 0);
+
+    // Confidence: based on how close the nearest neighbors actually are
+    const avgDist = topK.reduce((s, x) => s + x.dist, 0) / K;
+    const confidence = Math.min(1, Math.max(0, 1 - avgDist / 1.5));
+
+    setAiPrediction({ time: avgTime, velocity: avgVel, slip: slipVotes > 0.5, efficiency: avgEff, confidence });
+    setAiError({ time: null });
+  }, [setup, aiMemory]);
+
+  useEffect(() => { updatePredictions(); }, [setup, updatePredictions]);
+
+  // --- SCENE SETUP & RESET ---
+  const resetSimState = useCallback(() => {
+    setSim(prev => ({...prev, isPlaying: false}));
+    prevTimeRef.current = null;
+    if (requestRef.current) cancelAnimationFrame(requestRef.current);
+    
+    const { initialEnergy } = calculateFinalOutcomes(setup.mass, setup.radius, setup.angleDeg, setup.friction, SHAPES[setup.shapeKey].c);
+    
+    setSim({
+      isPlaying: false, time: 0, distance: 0, velocity: 0, omega: 0, theta_rot: 0,
+      pe: initialEnergy, ke_t: 0, ke_r: 0, total_e: initialEnergy, isSlipping: false,
+      finalTime: null
+    });
+    setAiError({ time: null });
+  }, [setup, calculateFinalOutcomes]);
+
+  useEffect(() => { resetSimState(); }, [setup, resetSimState]);
+
+  // Handle Input Changes
+  const handleSetupChange = (key, value) => setSetup(prev => ({ ...prev, [key]: value }));
+
+  // --- THREE.JS INITIALIZATION ---
+  useEffect(() => {
+    if (window.THREE) { setThreeLoaded(true); return; }
+    const script = document.createElement('script');
+    script.src = "https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js";
+    script.async = true;
+    script.onload = () => setThreeLoaded(true);
+    document.body.appendChild(script);
+    return () => { document.body.removeChild(script); };
+  }, []);
+
+  // --- THREE.JS SCENE BUILDER ---
+  useEffect(() => {
+    if (!threeLoaded || !mountRef.current) return;
+    const THREE = window.THREE;
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x0f172a); 
+
+    const width = mountRef.current.clientWidth;
+    const height = mountRef.current.clientHeight;
+    const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(width, height);
+    renderer.shadowMap.enabled = true;
+    mountRef.current.innerHTML = ''; 
+    mountRef.current.appendChild(renderer.domElement);
+
+    scene.add(new THREE.AmbientLight(0xffffff, 0.4));
+    const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    dirLight.position.set(10, 20, 10);
+    scene.add(dirLight);
+    
+    const grid = new THREE.GridHelper(40, 40, 0x334155, 0x1e293b);
+    grid.position.y = -0.5;
+    scene.add(grid);
+
+    sceneRefs.current = { scene, camera, renderer, rampGroup: new THREE.Group(), objectGroup: new THREE.Group(), arrows: {} };
+    scene.add(sceneRefs.current.rampGroup);
+    scene.add(sceneRefs.current.objectGroup);
+
+    const onMouseMove = (e) => {
+      if (!camState.current.isDragging) return;
+      camState.current.theta -= (e.clientX - camState.current.prevX) * 0.01;
+      camState.current.phi = Math.max(0.1, Math.min(Math.PI - 0.1, camState.current.phi - (e.clientY - camState.current.prevY) * 0.01));
+      camState.current.prevX = e.clientX; camState.current.prevY = e.clientY;
+      updateCamera();
+    };
+    mountRef.current.addEventListener('mousedown', (e) => { camState.current.isDragging = true; camState.current.prevX = e.clientX; camState.current.prevY = e.clientY; });
+    window.addEventListener('mouseup', () => camState.current.isDragging = false);
+    window.addEventListener('mousemove', onMouseMove);
+
+    return () => { renderer.dispose(); };
+  }, [threeLoaded]);
+
+  const updateCamera = useCallback(() => {
+    if (!threeLoaded) return;
+    const { camera, renderer, scene } = sceneRefs.current;
+    const { theta, phi, distance } = camState.current;
+    const target = new window.THREE.Vector3(RAMP_LENGTH / 2, 5, 0);
+    camera.position.set(target.x + distance * Math.sin(phi) * Math.cos(theta), target.y + distance * Math.cos(phi), target.z + distance * Math.sin(phi) * Math.sin(theta));
+    camera.lookAt(target);
+    if (renderer && scene) renderer.render(scene, camera);
+  }, [threeLoaded]);
+
+  // --- THREE.JS MESH UPDATER ---
+  useEffect(() => {
+    if (!threeLoaded || !sceneRefs.current.scene) return;
+    const THREE = window.THREE;
+    const { rampGroup, objectGroup, scene, arrows } = sceneRefs.current;
+
+    while(rampGroup.children.length > 0) { const c = rampGroup.children[0]; rampGroup.remove(c); c.geometry?.dispose(); c.material?.dispose(); }
+    while(objectGroup.children.length > 0) { const c = objectGroup.children[0]; objectGroup.remove(c); c.geometry?.dispose(); c.material?.dispose(); }
+
+    const angRad = (setup.angleDeg * Math.PI) / 180;
+    const H = RAMP_LENGTH * Math.sin(angRad);
+    const L = RAMP_LENGTH * Math.cos(angRad);
+
+    const plank = new THREE.Mesh(new THREE.BoxGeometry(RAMP_LENGTH, 0.5, 4), new THREE.MeshStandardMaterial({ color: 0x475569 }));
+    plank.position.set(L / 2, H / 2 - 0.25, 0);
+    plank.rotation.z = -angRad;
+    rampGroup.add(plank);
+    
+    // Fix: Create baseMesh first, then position it, then add it to avoid Vector3 error
+    const baseMesh = new THREE.Mesh(new THREE.BoxGeometry(0.5, H, 4), new THREE.MeshStandardMaterial({ color: 0x475569 }));
+    baseMesh.position.set(0, H / 2, 0);
+    rampGroup.add(baseMesh);
+
+    let geom;
+    if (setup.shapeKey === 'solid_disk') geom = new THREE.CylinderGeometry(setup.radius, setup.radius, 2, 32).rotateX(Math.PI/2);
+    else if (setup.shapeKey === 'hoop') geom = new THREE.TorusGeometry(setup.radius, Math.min(0.2, setup.radius*0.3), 16, 64);
+    else geom = new THREE.SphereGeometry(setup.radius, 32, 32);
+
+    const isHollow = setup.shapeKey === 'hollow_sphere';
+    objectGroup.add(new THREE.Mesh(geom, new THREE.MeshStandardMaterial({ color: SHAPES[setup.shapeKey].color, roughness: 0.4, wireframe: isHollow, transparent: isHollow, opacity: isHollow ? 0.3 : 1 })));
+    objectGroup.add(new THREE.Mesh(new THREE.BoxGeometry(setup.radius * 2.1, setup.radius * 0.2, setup.radius * 0.2), new THREE.MeshBasicMaterial({ color: 0xffffff })));
+
+    if (arrows.gravity) scene.remove(arrows.gravity); if (arrows.normal) scene.remove(arrows.normal); if (arrows.friction) scene.remove(arrows.friction);
+    arrows.gravity = new THREE.ArrowHelper(new THREE.Vector3(0, -1, 0), new THREE.Vector3(), setup.mass * G * 0.05, 0xa855f7);
+    arrows.normal = new THREE.ArrowHelper(new THREE.Vector3(Math.sin(angRad), Math.cos(angRad), 0), new THREE.Vector3(), setup.mass * G * Math.cos(angRad) * 0.05, 0x38bdf8);
+    arrows.friction = new THREE.ArrowHelper(new THREE.Vector3(-Math.cos(angRad), Math.sin(angRad), 0), new THREE.Vector3(), 2, 0xf43f5e);
+    scene.add(arrows.gravity); scene.add(arrows.normal); scene.add(arrows.friction);
+
+    updateCamera();
+  }, [threeLoaded, setup, updateCamera]);
+
+  // --- ANIMATION LOOP ---
+  const animate = useCallback((time) => {
+    if (prevTimeRef.current !== null && window.THREE) {
+      const deltaTime = (time - prevTimeRef.current) / 1000;
+      
+      setSim((prev) => {
+        const newTime = prev.time + deltaTime;
+        const c = SHAPES[setup.shapeKey].c;
+        const angRad = (setup.angleDeg * Math.PI) / 180;
+        
+        const isSlipping = setup.friction < (c / (1 + c)) * Math.tan(angRad);
+        let a = isSlipping ? G * (Math.sin(angRad) - setup.friction * Math.cos(angRad)) : (G * Math.sin(angRad)) / (1 + c);
+        a = Math.max(0.001, a);
+        let alpha = isSlipping ? (setup.friction * G * Math.cos(angRad)) / (c * setup.radius) : a / setup.radius;
+
+        let d = 0.5 * a * newTime * newTime;
+        let v = a * newTime;
+        
+        let finished = false;
+        if (d >= RAMP_LENGTH) {
+          d = RAMP_LENGTH;
+          v = Math.sqrt(2 * a * d); 
+          finished = true;
+        }
+
+        const t2 = Math.sqrt((2 * d) / a);
+        const thetaRot = 0.5 * alpha * t2 * t2;
+        const omega = alpha * t2;
+
+        const h = (RAMP_LENGTH - d) * Math.sin(angRad);
+        const pe = setup.mass * G * h;
+        const ke_t = 0.5 * setup.mass * v * v;
+        const ke_r = 0.5 * (c * setup.mass * setup.radius * setup.radius) * omega * omega;
+
+        const updatedSim = { ...prev, distance: d, velocity: v, omega: omega, theta_rot: thetaRot, pe, ke_t, ke_r, isSlipping };
+
+        if (finished) {
+          updatedSim.isPlaying = false;
+          if (!prev.finalTime) {
+            updatedSim.finalTime = Math.sqrt((2 * RAMP_LENGTH) / a);
+            
+            // Calculate AI Error Margin if predicted
+            if (aiPrediction.time) {
+              setAiError({
+                time: Math.abs((aiPrediction.time - updatedSim.finalTime) / updatedSim.finalTime) * 100
+              });
+            }
+          }
+        }
+
+        // 3D Rendering Update
+        const { objectGroup, arrows, renderer, scene, camera } = sceneRefs.current;
+        if (objectGroup && scene) {
+          const H = RAMP_LENGTH * Math.sin(angRad);
+          const xc = d * Math.cos(angRad) + setup.radius * Math.sin(angRad);
+          const yc = H - d * Math.sin(angRad) + setup.radius * Math.cos(angRad);
+          objectGroup.position.set(xc, yc, 0);
+          objectGroup.rotation.z = -thetaRot;
+
+          if (arrows.gravity) { arrows.gravity.position.set(xc, yc, 0); arrows.gravity.visible = setup.showForces; }
+          if (arrows.normal && arrows.friction) {
+            const cX = d * Math.cos(angRad); const cY = H - d * Math.sin(angRad);
+            arrows.normal.position.set(cX, cY, 0); arrows.normal.visible = setup.showForces;
+            arrows.friction.position.set(cX, cY, 0);
+            arrows.friction.setLength(Math.max(0.1, (isSlipping ? setup.friction * setup.mass * G * Math.cos(angRad) : c * setup.mass * a) * 0.05));
+            arrows.friction.visible = setup.showForces;
+          }
+          renderer.render(scene, camera);
+        }
+
+        return finished ? updatedSim : { ...updatedSim, time: newTime };
+      });
+    }
+    prevTimeRef.current = time;
+    if (sim.isPlaying) requestRef.current = requestAnimationFrame(animate);
+  }, [sim.isPlaying, setup, aiPrediction]);
+
+  useEffect(() => {
+    if (sim.isPlaying) requestRef.current = requestAnimationFrame(animate);
+    else { prevTimeRef.current = null; if (requestRef.current) cancelAnimationFrame(requestRef.current); }
+    return () => cancelAnimationFrame(requestRef.current);
+  }, [sim.isPlaying, animate]);
+
+  // Window resize handler
+  useEffect(() => {
+    const handleResize = () => {
+      if (!mountRef.current || !sceneRefs.current.renderer) return;
+      const w = mountRef.current.clientWidth; const h = mountRef.current.clientHeight;
+      sceneRefs.current.renderer.setSize(w, h); sceneRefs.current.camera.aspect = w / h; sceneRefs.current.camera.updateProjectionMatrix(); updateCamera();
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [updateCamera]);
+
+
+  return (
+    <div className="min-h-screen bg-slate-950 text-slate-200 font-sans p-4 md:p-6 lg:p-8">
+      
+      <header className="mb-8 border-b border-slate-800 pb-4 flex flex-col md:flex-row md:items-end justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-400 via-emerald-400 to-fuchsia-400 bg-clip-text text-transparent mb-1">
+            Rotational Physics Lab
+          </h1>
+          <p className="text-sm text-slate-400">Design physical experiments and use Data Science to predict the outcomes before they happen.</p>
+        </div>
+      </header>
+
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        
+        {/* --- LEFT PANEL: LAB SETUP --- */}
+        <div className="lg:col-span-3 space-y-6">
+          <section className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-lg">
+            <h2 className="text-lg font-semibold text-slate-100 flex items-center mb-5"><Settings2 className="w-5 h-5 mr-2 text-blue-400" /> Lab Setup</h2>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2 block">Object Type</label>
+                <div className="space-y-1.5">
+                  {Object.entries(SHAPES).map(([key, data]) => (
+                    <button key={key} onClick={() => handleSetupChange('shapeKey', key)} className={`w-full text-left px-3 py-2 rounded-lg border text-sm flex items-center justify-between transition-colors ${setup.shapeKey === key ? 'border-blue-500 bg-blue-500/10 text-blue-300' : 'border-slate-700 bg-slate-800/50 text-slate-300 hover:bg-slate-800'}`}>
+                      <span>{data.name}</span>
+                      {setup.shapeKey === key && <Check className="w-4 h-4 text-blue-500" />}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="pt-3 border-t border-slate-800/50">
+                <div className="flex justify-between mb-1"><label className="text-sm text-slate-300">Mass</label><span className="text-sm font-mono text-blue-400">{setup.mass.toFixed(1)} kg</span></div>
+                <input type="range" min="1" max="20" step="0.5" value={setup.mass} onChange={(e) => handleSetupChange('mass', parseFloat(e.target.value))} className="w-full accent-blue-500" />
+              </div>
+              
+              <div>
+                <div className="flex justify-between mb-1"><label className="text-sm text-slate-300">Radius</label><span className="text-sm font-mono text-blue-400">{setup.radius.toFixed(2)} m</span></div>
+                <input type="range" min="0.5" max="2.0" step="0.1" value={setup.radius} onChange={(e) => handleSetupChange('radius', parseFloat(e.target.value))} className="w-full accent-blue-500" />
+              </div>
+
+              <div>
+                <div className="flex justify-between mb-1"><label className="text-sm text-slate-300">Ramp Angle</label><span className="text-sm font-mono text-emerald-400">{setup.angleDeg}°</span></div>
+                <input type="range" min="5" max="60" step="1" value={setup.angleDeg} onChange={(e) => handleSetupChange('angleDeg', parseInt(e.target.value))} className="w-full accent-emerald-500" />
+              </div>
+
+              <div>
+                <div className="flex justify-between mb-1"><label className="text-sm text-slate-300">Surface Friction</label><span className="text-sm font-mono text-rose-400">{setup.friction.toFixed(2)}</span></div>
+                <input type="range" min="0" max="1" step="0.05" value={setup.friction} onChange={(e) => handleSetupChange('friction', parseFloat(e.target.value))} className="w-full accent-rose-500" />
+              </div>
+              
+              <div className="pt-3 border-t border-slate-800/50">
+                <label className="flex items-center space-x-3 cursor-pointer">
+                  <input type="checkbox" checked={setup.showForces} onChange={(e) => handleSetupChange('showForces', e.target.checked)} className="form-checkbox h-4 w-4 text-slate-500 rounded border-slate-700 bg-slate-800" />
+                  <span className="text-sm text-slate-400">Show Physical Forces</span>
+                </label>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        {/* --- CENTER PANEL: 3D VIEW & ENERGY MATH --- */}
+        <div className="lg:col-span-6 space-y-6 flex flex-col">
+          <section className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-lg flex-grow flex flex-col">
+            
+            {/* Viewport Header */}
+            <div className="px-4 py-3 border-b border-slate-800 flex justify-between items-center bg-slate-900/50">
+              <h2 className="text-sm font-semibold flex items-center"><Activity className="w-4 h-4 mr-2 text-emerald-400"/> Interactive Viewer</h2>
+              <div className="flex bg-slate-950 rounded-md p-1 border border-slate-800">
+                <button onClick={() => { if(!sim.isPlaying && sim.distance >= RAMP_LENGTH) resetSimState(); setSim(p => ({...p, isPlaying: !p.isPlaying})); }} className={`flex items-center px-3 py-1.5 rounded text-sm font-medium transition-colors ${sim.isPlaying ? 'bg-amber-500/20 text-amber-400' : 'bg-emerald-500/20 text-emerald-400'}`}>
+                  {sim.isPlaying ? <Pause className="w-4 h-4 mr-1.5" /> : <Play className="w-4 h-4 mr-1.5" />} {sim.isPlaying ? 'Pause' : (sim.distance >= RAMP_LENGTH ? 'Restart' : 'Run Experiment')}
+                </button>
+                <button onClick={resetSimState} className="flex items-center px-3 py-1.5 rounded text-sm font-medium text-slate-400 hover:text-slate-200 ml-1">
+                  <RotateCcw className="w-4 h-4 mr-1.5" /> Reset
+                </button>
+              </div>
+            </div>
+
+            {/* Canvas */}
+            <div className="relative w-full h-[320px] bg-[#0f172a]">
+              <div ref={mountRef} className="w-full h-full cursor-move" />
+              
+              {/* Overlay Status Box */}
+              <div className="absolute top-3 left-3 bg-slate-900/80 backdrop-blur border border-slate-700 p-3 rounded-lg shadow-lg pointer-events-none">
+                <div className="flex flex-col gap-1.5 text-sm">
+                  <div className="flex justify-between gap-6"><span className="text-slate-400">Time:</span><span className="font-mono text-slate-200">{sim.time.toFixed(2)} s</span></div>
+                  <div className="flex justify-between gap-6"><span className="text-slate-400">Speed:</span><span className="font-mono text-emerald-400">{sim.velocity.toFixed(1)} m/s</span></div>
+                  <div className={`mt-1 text-[11px] font-bold py-1 px-2 rounded flex items-center justify-center border ${sim.isSlipping ? 'bg-rose-500/20 text-rose-400 border-rose-500/50' : 'bg-emerald-500/20 text-emerald-400 border-emerald-500/50'}`}>
+                    {sim.isSlipping ? <><AlertTriangle className="w-3 h-3 mr-1" /> SLIDING</> : <><Check className="w-3 h-3 mr-1" /> PURE ROLLING</>}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Live Energy Equation */}
+            <div className="p-4 bg-slate-950 border-t border-slate-800">
+               <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3 flex items-center"><Calculator className="w-3.5 h-3.5 mr-1.5"/> Energy Monitor</h3>
+               <div className="text-center font-mono text-sm md:text-base mb-2 text-slate-400">
+                 E<sub>init</sub> = PE + KE<sub>trans</sub> + KE<sub>rot</sub>
+               </div>
+               <div className="flex items-center justify-center gap-x-2 flex-wrap font-mono text-sm">
+                  <span className="text-slate-200 font-bold bg-slate-800 px-2 py-1 rounded">{sim.total_e.toFixed(0)} J</span><span className="text-slate-500">=</span>
+                  <span className="text-blue-400 bg-blue-500/10 border border-blue-500/20 px-2 py-1 rounded">{sim.pe.toFixed(0)} J</span><span className="text-slate-500">+</span>
+                  <span className="text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-1 rounded">{sim.ke_t.toFixed(0)} J</span><span className="text-slate-500">+</span>
+                  <span className="text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-1 rounded">{sim.ke_r.toFixed(0)} J</span>
+               </div>
+            </div>
+          </section>
+        </div>
+
+        {/* --- RIGHT PANEL: AI PREDICTION ASSISTANT --- */}
+        <div className="lg:col-span-3 space-y-6">
+          <section className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-lg flex flex-col h-full">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold text-slate-100 flex items-center"><BrainCircuit className="w-5 h-5 mr-2 text-fuchsia-400" /> AI Assistant</h2>
+              <div className="text-[10px] uppercase tracking-widest font-bold bg-slate-800 px-2 py-1 rounded text-slate-400 flex items-center">
+                <Database className="w-3 h-3 mr-1"/> {aiMemory.length} Memories
+              </div>
+            </div>
+
+            {aiMemory.length === 0 ? (
+              <div className="flex-grow flex flex-col items-center justify-center text-center p-4 border-2 border-dashed border-slate-800 rounded-lg">
+                <Database className="w-8 h-8 text-slate-600 mb-3" />
+                <h3 className="text-sm font-semibold text-slate-300 mb-2">No Data Available</h3>
+                <p className="text-xs text-slate-500 mb-4">The AI needs historical data to make predictions. Run automated background experiments to build its memory.</p>
+                <button onClick={trainAI} disabled={isTraining} className="w-full py-2.5 bg-fuchsia-600 hover:bg-fuchsia-500 disabled:bg-slate-700 text-white rounded-lg text-sm font-semibold transition-colors flex items-center justify-center">
+                  {isTraining ? 'Running Simulations...' : 'Train AI Assistant'}
+                </button>
+              </div>
+            ) : (
+              <div className="flex-grow flex flex-col space-y-3">
+                {/* Confidence Bar */}
+                <div>
+                  <div className="flex justify-between items-center mb-1.5">
+                    <span className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Confidence</span>
+                    <span className={`font-mono text-xs font-bold ${aiPrediction.confidence > 0.8 ? 'text-emerald-400' : aiPrediction.confidence > 0.5 ? 'text-amber-400' : 'text-rose-400'}`}>{(aiPrediction.confidence * 100).toFixed(0)}%</span>
+                  </div>
+                  <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                    <div className={`h-full rounded-full transition-all duration-500 ${aiPrediction.confidence > 0.8 ? 'bg-emerald-500' : aiPrediction.confidence > 0.5 ? 'bg-amber-500' : 'bg-rose-500'}`} style={{width: `${aiPrediction.confidence * 100}%`}} />
+                  </div>
+                </div>
+
+                {/* Predictions */}
+                <div className="bg-slate-950 border border-fuchsia-500/30 rounded-lg p-3 space-y-2">
+                  <h3 className="text-xs font-semibold text-fuchsia-400 uppercase tracking-wider">Predictions</h3>
+                  
+                  <div className="flex justify-between items-center bg-slate-900 p-2 rounded">
+                    <span className="text-sm text-slate-300 flex items-center"><Timer className="w-4 h-4 mr-2 text-slate-500"/> Time</span>
+                    <span className="font-mono text-fuchsia-300 font-bold">{aiPrediction.time ? `${aiPrediction.time.toFixed(2)}s` : '...'}</span>
+                  </div>
+                  <div className="flex justify-between items-center bg-slate-900 p-2 rounded">
+                    <span className="text-sm text-slate-300 flex items-center"><Activity className="w-4 h-4 mr-2 text-slate-500"/> Velocity</span>
+                    <span className="font-mono text-emerald-300 font-bold">{aiPrediction.velocity ? `${aiPrediction.velocity.toFixed(1)} m/s` : '...'}</span>
+                  </div>
+                  <div className="flex justify-between items-center bg-slate-900 p-2 rounded">
+                    <span className="text-sm text-slate-300">Efficiency</span>
+                    <span className="font-mono text-amber-300 font-bold">{aiPrediction.efficiency != null ? `${(aiPrediction.efficiency * 100).toFixed(0)}%` : '...'}</span>
+                  </div>
+                  <div className="flex justify-between items-center bg-slate-900 p-2 rounded">
+                    <span className="text-sm text-slate-300">Slip?</span>
+                    <span className={`text-xs font-bold px-2 py-0.5 rounded ${aiPrediction.slip ? 'bg-rose-500/20 text-rose-400' : 'bg-emerald-500/20 text-emerald-400'}`}>{aiPrediction.slip == null ? '...' : aiPrediction.slip ? 'YES' : 'NO'}</span>
+                  </div>
+                </div>
+
+                {/* Results */}
+                <div className={`mt-auto border rounded-lg p-3 transition-all duration-500 ${sim.finalTime ? 'bg-emerald-950/30 border-emerald-500/30' : 'bg-slate-900 border-slate-800'}`}>
+                  <h3 className={`text-xs font-semibold uppercase tracking-wider mb-2 ${sim.finalTime ? 'text-emerald-400' : 'text-slate-500'}`}>
+                    {sim.finalTime ? 'Results' : 'Awaiting Run...'}
+                  </h3>
+                  
+                  <div className="space-y-2 opacity-90">
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-slate-400">Actual Time:</span>
+                      <span className="font-mono text-slate-200">{sim.finalTime ? `${sim.finalTime.toFixed(2)}s` : '--'}</span>
+                    </div>
+                  </div>
+
+                  {aiError.time !== null && (
+                     <div className="mt-3 pt-3 border-t border-emerald-500/20 text-center">
+                        <div className="bg-slate-950 rounded p-1.5 inline-block px-4">
+                          <div className="text-[10px] text-slate-500 uppercase">Error Margin</div>
+                          <div className={`font-mono text-xs ${aiError.time < 5 ? 'text-emerald-400' : 'text-amber-400'}`}>±{aiError.time.toFixed(1)}%</div>
+                        </div>
+                     </div>
+                  )}
+                </div>
+
+                {/* Retrain */}
+                <button onClick={trainAI} disabled={isTraining} className="w-full py-2 bg-slate-800 hover:bg-slate-700 disabled:bg-slate-800 text-slate-400 hover:text-slate-200 rounded-lg text-xs font-medium transition-colors border border-slate-700">
+                  {isTraining ? 'Retraining...' : 'Retrain'}
+                </button>
+              </div>
+            )}
+          </section>
+        </div>
+
+      </div>
+    </div>
+  );
+}
