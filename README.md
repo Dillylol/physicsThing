@@ -1,16 +1,40 @@
-# React + Vite
+# Rotational Physics Lab
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Interactive 3D physics simulator for rotational motion, compound inertia systems, and energy analysis.
 
-Currently, two official plugins are available:
+**[Live Demo →](https://dillylol.github.io/physicsThing/)**
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Features
 
-## React Compiler
+- **Compound Inertia Systems** — Configure inner + outer disk/hoop combinations (small radius between larger radii)
+- **Custom Track Editor** — Build tracks with ramps, flat sections, loops, and adjustable thickness
+- **3D Interactive Viewer** — Three.js 3D rendering with orbit camera and force arrows
+- **Energy Analysis** — Live `E = ½mv² + ½Iω² + mgh` with animated energy bar
+- **Force Calculations** — Gravity, normal, friction, centripetal, net force summation
+- **Torque** — `τ = Iα = FR` with angular acceleration
+- **Angular Momentum** — `L = Iω` tracking throughout the simulation
+- **Mouse Hover Analysis** — Hover over any track point to see calculated energy
+- **Smooth Track Transitions** — Cubic Hermite interpolation at segment junctions
+- **Equations Panel** — Full breakdown of all physics at the object's current position
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Tech Stack
 
-## Expanding the ESLint configuration
+- React 19 + Vite
+- Three.js (3D rendering)
+- Tailwind CSS v4
+- GitHub Pages (hosting)
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+## Development
+
+```bash
+npm install
+npm run dev
+```
+
+## Build & Deploy
+
+Pushes to `main` automatically deploy to GitHub Pages via GitHub Actions.
+
+```bash
+npm run build
+```
