@@ -408,7 +408,6 @@ export default function Simulator({ track, simState, setup, inertiaData, onHover
             totalInertia: inertiaData.totalInertia,
             effectiveC: inertiaData.effectiveC,
             rollRadius: inertiaData.rollRadius,
-            friction: setup.friction,
             track, distance: d, initialHeight: initialH,
           });
 
@@ -453,7 +452,7 @@ export default function Simulator({ track, simState, setup, inertiaData, onHover
     };
     animId = requestAnimationFrame(renderLoop);
     return () => cancelAnimationFrame(animId);
-  }, [track, simState, setup.showForces, setup.friction, inertiaData, trackCenter]);
+  }, [track, simState, setup.showForces, inertiaData, trackCenter]);
 
   // --- MOUSE HOVER FOR ENERGY TOOLTIPS ---
   const handleMouseMove = useCallback((e) => {
@@ -490,7 +489,6 @@ export default function Simulator({ track, simState, setup, inertiaData, onHover
         totalInertia: inertiaData.totalInertia,
         effectiveC: inertiaData.effectiveC,
         rollRadius: inertiaData.rollRadius,
-        friction: setup.friction,
         track, distance: pt.cumDist, initialHeight,
       });
 
@@ -504,7 +502,7 @@ export default function Simulator({ track, simState, setup, inertiaData, onHover
       setTooltip(null);
       onHover?.(null);
     }
-  }, [track, inertiaData, setup.friction, onHover]);
+  }, [track, inertiaData, onHover]);
 
   return (
     <div className="relative w-full h-full" style={{ minHeight: 320 }}>

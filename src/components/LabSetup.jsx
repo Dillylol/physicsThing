@@ -3,7 +3,7 @@ import { SHAPES, COMPOUND_SHAPES, OBJECT_PRESETS } from '../physics/inertia';
 import { Settings2, Check, Layers, FlaskConical } from 'lucide-react';
 
 /**
- * Lab Setup Panel — Configure object type, mass, radius, friction.
+ * Lab Setup Panel — Configure object type, mass, radius.
  * Supports compound inertia mode (hoop/disk only) with center + 2 side objects.
  * Compound can be yoyo (sides smaller) or wheel (sides larger).
  */
