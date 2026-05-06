@@ -309,11 +309,6 @@ export default function Simulator({ track, simState, setup, inertiaData, onHover
 
       switch (shapeKey) {
         case 'hoop':
-          geom = new THREE.TorusGeometry(R, Math.min(0.2, R * 0.3), 16, 64);
-          color = 0xef4444;
-          wireframe = true; transparent = true; opacity = 0.6;
-          break;
-        case 'solid_hoop':
           geom = new THREE.TorusGeometry(R, Math.min(0.25, R * 0.35), 24, 64);
           color = 0xf97316;
           break;
