@@ -1,6 +1,6 @@
 import React from 'react';
-import { SHAPES, COMPOUND_SHAPES } from '../physics/inertia';
-import { Settings2, Check, Layers } from 'lucide-react';
+import { SHAPES, COMPOUND_SHAPES, OBJECT_PRESETS } from '../physics/inertia';
+import { Settings2, Check, Layers, FlaskConical } from 'lucide-react';
 
 /**
  * Lab Setup Panel — Configure object type, mass, radius, friction.
@@ -17,6 +17,47 @@ export default function LabSetup({ setup, onChange }) {
       </h2>
 
       <div className="space-y-4">
+        {/* FRQ Object Presets */}
+        <div>
+          <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2 block flex items-center">
+            <FlaskConical className="w-3.5 h-3.5 mr-1 text-emerald-400" /> FRQ Presets
+          </label>
+          <div className="space-y-1.5 mb-3">
+            {Object.entries(OBJECT_PRESETS).map(([key, preset]) => (
+              <button
+                key={key}
+                onClick={() => {
+                  if (preset.isCompound) {
+                    onChange({
+                      ...setup,
+                      isCompound: true,
+                      centerShape: preset.centerShape,
+                      centerMass: preset.centerMass,
+                      centerRadius: preset.centerRadius,
+                      sideShape: preset.sideShape,
+                      sideMass: preset.sideMass,
+                      sideRadius: preset.sideRadius,
+                      rollsOnInner: preset.rollsOnInner,
+                    });
+                  } else {
+                    onChange({
+                      ...setup,
+                      isCompound: false,
+                      shapeKey: preset.shapeKey,
+                      mass: preset.mass,
+                      radius: preset.radius,
+                    });
+                  }
+                }}
+                className="w-full text-left px-3 py-2 rounded-lg border border-slate-700 bg-slate-800/50 text-slate-300 hover:bg-slate-800 hover:border-blue-500/50 transition-all text-sm"
+              >
+                <span className="font-medium">{preset.name}</span>
+                <span className="text-xs text-slate-500 ml-2">{preset.desc}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
         {/* Object Type */}
         <div>
           <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2 block">

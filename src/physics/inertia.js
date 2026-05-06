@@ -55,6 +55,93 @@ export const COMPOUND_SHAPES = {
 };
 
 /**
+ * Object presets matching FRQ experimental objects.
+ * FRQ2 uses I = bmr² where b characterizes the mass distribution.
+ * The minimum height to complete a loop of radius R is h = R(5 + b)/2.
+ */
+export const OBJECT_PRESETS = {
+  solid_sphere: {
+    name: 'Solid Sphere',
+    desc: 'b = 2/5 = 0.40',
+    shapeKey: 'solid_sphere',
+    mass: 2,
+    radius: 0.3,
+    b: 0.4,
+    isCompound: false,
+  },
+  hollow_sphere: {
+    name: 'Hollow Sphere',
+    desc: 'b = 2/3 ≈ 0.67',
+    shapeKey: 'hollow_sphere',
+    mass: 2,
+    radius: 0.3,
+    b: 2 / 3,
+    isCompound: false,
+  },
+  solid_cylinder: {
+    name: 'Solid Cylinder',
+    desc: 'b = 1/2 = 0.50',
+    shapeKey: 'solid_disk',
+    mass: 2,
+    radius: 0.3,
+    b: 0.5,
+    isCompound: false,
+  },
+  hollow_cylinder: {
+    name: 'Hollow Cylinder (Hoop)',
+    desc: 'b = 1.0',
+    shapeKey: 'hoop',
+    mass: 2,
+    radius: 0.3,
+    b: 1.0,
+    isCompound: false,
+  },
+  frq1_toy: {
+    name: 'FRQ1 Compound Toy',
+    desc: '3 coaxial cylinders: center (M, R) + 2 outer (M, 2R)',
+    isCompound: true,
+    centerShape: 'solid_disk',
+    centerMass: 2,
+    centerRadius: 0.5,
+    sideShape: 'solid_disk',
+    sideMass: 2,
+    sideRadius: 1.0,
+    rollsOnInner: true,
+    b: 1.5,
+  },
+};
+
+/**
+ * Calculate minimum release height to complete a loop (FRQ2 formula).
+ * At the top of the loop: N >= 0 requires v² >= gR
+ * Energy conservation: mgh = ½mv²(1+b) + mg(2R)
+ * With v² = gR: h_min = R(5 + b) / 2
+ */
+export function minimumLoopHeight(loopRadius, b) {
+  return loopRadius * (5 + b) / 2;
+}
+
+/**
+ * Calculate the speed at the top of the loop given release height h.
+ * mgh = ½mv²_top(1+b) + mg(2R)
+ * v²_top = 2g(h - 2R) / (1 + b)
+ */
+export function speedAtLoopTop(h, loopRadius, b) {
+  const heightAboveBottom = h - 2 * loopRadius;
+  if (heightAboveBottom <= 0) return 0;
+  return Math.sqrt(2 * 9.81 * heightAboveBottom / (1 + b));
+}
+
+/**
+ * Calculate normal force at the top of a loop.
+ * At top: N + mg = mv²/R → N = m(v²/R - g)
+ * N < 0 means the object loses contact.
+ */
+export function normalForceAtLoopTop(mass, speed, loopRadius) {
+  return mass * (speed * speed / loopRadius - 9.81);
+}
+
+/**
  * Calculate inertia for a single object.
  */
 export function singleInertia(shapeKey, mass, radius) {

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Play, Pause, RotateCcw, Activity, Calculator, Waypoints, Zap, FastForward, BrainCircuit } from 'lucide-react';
+import { Play, Pause, RotateCcw, Activity, Calculator, Waypoints, Zap, FastForward, BrainCircuit, CircleDot } from 'lucide-react';
 import { buildInertiaFromSetup, SHAPES } from '../physics/inertia';
 import { buildTrack, DEFAULT_SEGMENTS } from '../physics/trackBuilder';
 import { stepSimulation, G } from '../physics/engine';
@@ -7,6 +7,7 @@ import Simulator from './Simulator';
 import LabSetup from './LabSetup';
 import TrackEditor from './TrackEditor';
 import EquationsPanel from './EquationsPanel';
+import LoopAnalysis from './LoopAnalysis';
 import AIAssistant from './AIAssistant';
 
 /**
@@ -159,7 +160,7 @@ export default function PhysicsAILab() {
               Rotational Physics Lab
             </h1>
             <p className="text-sm text-slate-500">
-              Compound inertia systems · Custom tracks · Live force & energy analysis
+              Rolling objects · Loop-the-loop · Compound inertia · FRQ-based experiments
             </p>
           </div>
 
@@ -184,6 +185,16 @@ export default function PhysicsAILab() {
               }`}
             >
               <Calculator className="w-4 h-4 mr-1.5" /> Equations
+            </button>
+            <button
+              onClick={() => setActiveTab('loop')}
+              className={`flex items-center px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                activeTab === 'loop'
+                  ? 'bg-slate-800 text-amber-400 shadow-md'
+                  : 'text-slate-400 hover:text-slate-300'
+              }`}
+            >
+              <CircleDot className="w-4 h-4 mr-1.5" /> Loop
             </button>
             <button
               onClick={() => setActiveTab('ai')}
@@ -310,7 +321,7 @@ export default function PhysicsAILab() {
                   <Zap className="w-3.5 h-3.5 mr-1.5 text-amber-400" /> Energy Monitor
                 </h3>
                 <div className="text-center font-mono text-sm mb-2 text-slate-400">
-                  E<sub>total</sub> = ½mv² + ½Iω² + mgh
+                  K<sub>total</sub> = ½mv²(1 + b) = ½mv² + ½Iω²
                 </div>
                 <div className="flex items-center justify-center gap-x-2 flex-wrap font-mono text-sm">
                   <span className="text-slate-200 font-bold bg-slate-800 px-2 py-1 rounded">
@@ -349,7 +360,7 @@ export default function PhysicsAILab() {
             </section>
           </div>
 
-          {/* RIGHT PANEL: Equations or AI */}
+          {/* RIGHT PANEL: Equations, Loop, or AI */}
           <div className="lg:col-span-3">
             {activeTab === 'equations' ? (
               <EquationsPanel
@@ -357,6 +368,13 @@ export default function PhysicsAILab() {
                 inertiaData={inertiaData}
                 setup={setup}
                 track={track}
+              />
+            ) : activeTab === 'loop' ? (
+              <LoopAnalysis
+                track={track}
+                inertiaData={inertiaData}
+                setup={setup}
+                simState={simState}
               />
             ) : activeTab === 'ai' ? (
               <AIAssistant
@@ -394,10 +412,40 @@ export default function PhysicsAILab() {
                       <h3 className="text-xs font-semibold text-emerald-400 uppercase tracking-wider mb-2">Live Values</h3>
                       <QuickRow label="Total Mass" value={`${inertiaData.totalMass.toFixed(2)} kg`} />
                       <QuickRow label="Roll Radius" value={`${inertiaData.rollRadius.toFixed(3)} m`} />
-                      <QuickRow label="c = I/(mR²)" value={inertiaData.effectiveC.toFixed(4)} />
+                      <QuickRow label="b = I/(mR²)" value={inertiaData.effectiveC.toFixed(4)} />
                       <QuickRow label="Accel" value={`${(simState.acceleration || 0).toFixed(3)} m/s²`} />
-                      <QuickRow label="Angular Mom." value={`${(simState.angularMomentum || 0).toFixed(4)} kg·m²/s`} />
+                      <QuickRow label="L = Iω" value={`${(simState.angularMomentum || 0).toFixed(4)} kg·m²/s`} />
                     </div>
+
+                    {/* Loop Info (if track has a loop) */}
+                    {track.segmentRanges?.some(s => s.type === 'loop') && (
+                      <div className="bg-slate-950 border border-amber-500/20 rounded-lg p-3 space-y-1.5">
+                        <h3 className="text-xs font-semibold text-amber-400 uppercase tracking-wider mb-2">Loop Status</h3>
+                        {(() => {
+                          const loopSeg = track.segmentRanges.find(s => s.type === 'loop');
+                          const R = loopSeg.params.radius;
+                          const b = inertiaData.effectiveC;
+                          const hMin = R * (5 + b) / 2;
+                          const startH = track.points[0].y;
+                          const loopH = track.points[loopSeg.startIdx].y;
+                          const effectiveH = startH - loopH;
+                          const canComplete = effectiveH >= hMin;
+                          return (
+                            <>
+                              <QuickRow label="h_min" value={`${hMin.toFixed(3)} m`} />
+                              <QuickRow label="h_actual" value={`${effectiveH.toFixed(3)} m`} />
+                              <div className={`mt-1 text-[11px] font-bold py-1 px-2 rounded flex items-center justify-center border ${
+                                canComplete
+                                  ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/50'
+                                  : 'bg-rose-500/20 text-rose-400 border-rose-500/50'
+                              }`}>
+                                {canComplete ? '✓ LOOP CLEARANCE' : '✗ INSUFFICIENT HEIGHT'}
+                              </div>
+                            </>
+                          );
+                        })()}
+                      </div>
+                    )}
 
                     {/* Torque */}
                     <div className="bg-slate-950 border border-amber-500/20 rounded-lg p-3 space-y-1.5">

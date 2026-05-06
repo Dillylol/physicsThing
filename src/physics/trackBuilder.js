@@ -313,12 +313,67 @@ export function getHeightAt(track, dist) {
 }
 
 /**
- * Default track segments
+ * Default track segments — matches FRQ2 loop scenario
  */
 export const DEFAULT_SEGMENTS = [
-  { type: 'ramp', length: 12, angleDeg: 30 },
+  { type: 'ramp', length: 10, angleDeg: 40 },
+  { type: 'flat', length: 3 },
+  { type: 'loop', radius: 2.5 },
   { type: 'flat', length: 4 },
 ];
+
+/**
+ * Track presets matching FRQ scenarios
+ */
+export const TRACK_PRESETS = {
+  frq2_loop: {
+    name: 'Loop Track (FRQ 2)',
+    desc: 'Ramp → Loop: Find minimum height to complete the loop',
+    segments: [
+      { type: 'ramp', length: 10, angleDeg: 40 },
+      { type: 'flat', length: 3 },
+      { type: 'loop', radius: 2.5 },
+      { type: 'flat', length: 4 },
+    ],
+  },
+  frq1_incline: {
+    name: 'Inclined Plane (FRQ 1)',
+    desc: 'Simple incline for analyzing rolling dynamics, forces, and torque',
+    segments: [
+      { type: 'ramp', length: 15, angleDeg: 30 },
+      { type: 'flat', length: 6 },
+    ],
+  },
+  steep_ramp: {
+    name: 'Steep Ramp',
+    desc: 'Steeper angle to test slip conditions',
+    segments: [
+      { type: 'ramp', length: 12, angleDeg: 50 },
+      { type: 'flat', length: 5 },
+    ],
+  },
+  double_loop: {
+    name: 'Double Loop',
+    desc: 'Two loops of different radii — requires high release',
+    segments: [
+      { type: 'ramp', length: 14, angleDeg: 45 },
+      { type: 'flat', length: 2 },
+      { type: 'loop', radius: 2 },
+      { type: 'flat', length: 3 },
+      { type: 'loop', radius: 3 },
+      { type: 'flat', length: 3 },
+    ],
+  },
+  valley: {
+    name: 'Valley Ramp',
+    desc: 'Down and back up — energy transfer exploration',
+    segments: [
+      { type: 'ramp', length: 10, angleDeg: 35 },
+      { type: 'flat', length: 4 },
+      { type: 'rampUp', length: 8, angleDeg: 30 },
+    ],
+  },
+};
 
 /**
  * Get segment display info for the track editor.
