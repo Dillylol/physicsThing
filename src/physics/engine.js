@@ -1,44 +1,41 @@
 /**
  * Physics Engine — Core simulation math.
  * 
+ * Assumes pure rolling without slipping (as in AP Physics C FRQs).
+ * Friction is derived from the rolling constraint: f = cma
+ * 
  * Handles:
  * - Rolling dynamics on arbitrary track geometry
  * - Energy calculations (KE_trans, KE_rot, PE)
- * - Force calculations (gravity, normal, friction, centripetal)
- * - Torque (τ = Iα, τ = FR)
+ * - Force calculations (gravity, normal, friction as derived, centripetal)
+ * - Torque (τ = Iα, τ = fR)
  * - Angular momentum (L = Iω)
- * - Slip detection
  */
 
 const G = 9.81;
 
 /**
  * Compute the physics state at a given position along the track.
- * Uses energy conservation + track geometry.
+ * Uses energy conservation for pure rolling without slipping.
  * 
  * @param {object} params
  * @param {number} params.totalMass - total mass of the system (kg)
  * @param {number} params.totalInertia - total moment of inertia (kg·m²)
- * @param {number} params.effectiveC - I/(mR²) ratio
+ * @param {number} params.effectiveC - I/(mR²) ratio (b value)
  * @param {number} params.rollRadius - radius that contacts the surface (m)
- * @param {number} params.friction - coefficient of friction
  * @param {object} params.track - track data from buildTrack()
  * @param {number} params.distance - cumulative distance along the track (m)
  * @param {number} params.initialHeight - height of the starting point (m)
  * @returns {object} Complete physics state
  */
 export function computePhysicsAt(params) {
-  const { totalMass: m, totalInertia: I, effectiveC: c, rollRadius: R, friction: mu, track, distance: d, initialHeight: h0 } = params;
+  const { totalMass: m, totalInertia: I, effectiveC: c, rollRadius: R, track, distance: d, initialHeight: h0 } = params;
 
-  // Get position on track
   const pos = getTrackPosAtImport(track, d);
   const h = pos.y;
 
-  // Energy conservation: mgh₀ = mgh + ½mv² + ½Iω²
-  // For pure rolling: ω = v/R, so ½Iω² = ½I(v/R)² = ½(I/R²)v² = ½(cm)v²
-  // Total KE = ½mv²(1 + c)
-  // v² = 2g(h₀ - h) / (1 + c) [if pure rolling, no friction loss]
-  
+  // Energy conservation (pure rolling): mgh₀ = mgh + ½mv²(1 + c)
+  // v² = 2g(h₀ - h) / (1 + c)
   const heightDrop = h0 - h;
   const vSquared = Math.max(0, (2 * G * heightDrop) / (1 + c));
   const v = Math.sqrt(vSquared);
@@ -46,54 +43,36 @@ export function computePhysicsAt(params) {
 
   // Local track geometry
   const tangentAngle = pos.tangentAngle || 0;
-  const slopeAngle = -tangentAngle; // angle from horizontal, positive = downhill
   const curvature = pos.curvature || 0;
 
   // --- FORCES ---
-  // Gravity component along the track
   const F_gravity = m * G;
   const F_gravity_parallel = m * G * Math.sin(Math.abs(tangentAngle));
   const F_gravity_normal = m * G * Math.cos(tangentAngle);
 
-  // Normal force
+  // Normal force (includes centripetal contribution in curves)
   let F_normal;
   if (curvature > 0) {
-    // In a loop: N = mv²/r - mg*cos(θ_loop) (at various positions in the loop)
-    // More precisely: centripetal acceleration = v²/r
-    const r = 1 / curvature;
-    // The angle in the loop determines how gravity contributes
     F_normal = m * v * v * curvature + F_gravity_normal;
   } else {
     F_normal = F_gravity_normal;
   }
 
-  // Friction force (for rolling without slipping)
-  const muCrit = (c / (1 + c)) * Math.tan(Math.abs(tangentAngle) || 0.001);
-  const isSlipping = mu < muCrit && Math.abs(tangentAngle) > 0.01;
+  // Pure rolling acceleration: a = g sinθ / (1 + c)
+  const a_linear = (G * Math.sin(Math.abs(tangentAngle))) / (1 + c);
+  const alpha = a_linear / R;
 
-  let F_friction;
-  let a_linear;
-  let alpha;
+  // Friction force derived from rolling constraint: f = cma
+  const F_friction = c * m * a_linear;
 
-  if (isSlipping) {
-    F_friction = mu * F_normal;
-    a_linear = G * Math.sin(Math.abs(tangentAngle)) - mu * G * Math.cos(tangentAngle);
-    alpha = (F_friction * R) / I;
-  } else {
-    a_linear = (G * Math.sin(Math.abs(tangentAngle))) / (1 + c);
-    F_friction = c * m * a_linear;
-    alpha = a_linear / R;
-  }
-
-  // Centripetal force (on loops)
+  // Centripetal force (in loops)
   let F_centripetal = 0;
   if (curvature > 0) {
     F_centripetal = m * v * v * curvature;
   }
 
   // --- TORQUE ---
-  const torque_Ia = I * alpha;
-  const torque_FR = F_friction * R;
+  const torque = F_friction * R; // τ = fR = Iα
 
   // --- ENERGY ---
   const PE = m * G * h;
@@ -105,11 +84,9 @@ export function computePhysicsAt(params) {
   const L = I * omega;
 
   // --- NET FORCE ---
-  // Along the track surface
   const F_net = m * a_linear;
 
   return {
-    // Position
     x: pos.x,
     y: pos.y,
     distance: d,
@@ -117,20 +94,17 @@ export function computePhysicsAt(params) {
     segmentType: pos.type,
     curvature,
 
-    // Kinematics
     velocity: v,
     omega,
     acceleration: a_linear,
     angularAcceleration: alpha,
     height: h,
 
-    // Energy
     PE,
     KE_trans,
     KE_rot,
     totalEnergy,
 
-    // Forces
     F_gravity,
     F_gravity_parallel,
     F_gravity_normal,
@@ -139,53 +113,34 @@ export function computePhysicsAt(params) {
     F_centripetal,
     F_net,
 
-    // Torque
-    torque_Ia,
-    torque_FR,
+    torque,
 
-    // Momentum
     angularMomentum: L,
     linearMomentum: m * v,
-
-    // Status
-    isSlipping,
   };
 }
 
 /**
- * Step the simulation forward by dt using Euler integration on the track.
- * This is more accurate than pure energy conservation because it handles
- * friction losses and non-conservative forces.
+ * Step the simulation forward by dt using Euler integration.
+ * Pure rolling without slipping: a = g sinθ / (1 + c)
  */
 export function stepSimulation(state, dt, params) {
-  const { totalMass: m, totalInertia: I, effectiveC: c, rollRadius: R, friction: mu, track } = params;
+  const { totalMass: m, totalInertia: I, effectiveC: c, rollRadius: R, track } = params;
 
   const pos = getTrackPosAtImport(track, state.distance);
   const tangentAngle = pos.tangentAngle || 0;
-
-  // Gravity component along the track (positive = accelerating downhill)
   const sinA = Math.sin(Math.abs(tangentAngle));
-  const cosA = Math.cos(tangentAngle);
   const curvature = pos.curvature || 0;
 
-  const muCrit = (c / (1 + c)) * Math.tan(Math.abs(tangentAngle) || 0.001);
-  const isSlipping = mu < muCrit && sinA > 0.01;
+  // Pure rolling acceleration
+  let a = (G * sinA) / (1 + c);
 
-  let a;
-  if (isSlipping) {
-    a = G * (sinA - mu * cosA);
-  } else {
-    a = (G * sinA) / (1 + c);
-  }
-
-  // Direction: if tangent angle is negative (going downhill), acceleration is positive (forward)
-  // if tangent angle is positive (going uphill), gravity decelerates
+  // Direction: uphill decelerates, downhill accelerates
   if (tangentAngle > 0.01) {
-    a = -a; // Going uphill, decelerate
+    a = -a;
   }
 
   let newVelocity = state.velocity + a * dt;
-  // Don't allow negative velocity (the object would need to go backwards)
   if (newVelocity < 0) newVelocity = 0;
 
   let newDistance = state.distance + state.velocity * dt + 0.5 * a * dt * dt;
@@ -214,7 +169,6 @@ export function stepSimulation(state, dt, params) {
     totalEnergy: PE + KE_trans + KE_rot,
     angularMomentum: I * omega,
     linearMomentum: m * newVelocity,
-    isSlipping,
     acceleration: a,
     x: newPos.x,
     y: newPos.y,
@@ -225,7 +179,6 @@ export function stepSimulation(state, dt, params) {
   };
 }
 
-// Internal import helper — we'll inline the function to avoid circular deps
 function getTrackPosAtImport(track, dist) {
   const pts = track.points;
   if (!pts || pts.length === 0) return { x: 0, y: 0, tangentAngle: 0, type: 'flat', curvature: 0 };
@@ -256,19 +209,16 @@ function getTrackPosAtImport(track, dist) {
 }
 
 /**
- * Calculate the minimum speed needed at the BOTTOM of a loop to complete it.
- * At the top: mg = mv²/R → v²_top = gR (minimum condition)
- * Energy conservation (bottom→top): ½mv²_bot(1+c) = ½mv²_top(1+c) + mg(2R)
- * v²_bot = v²_top + 4gR/(1+c) = gR + 4gR/(1+c) = gR[(1+c+4)/(1+c)] = gR(5+c)/(1+c)
+ * Minimum speed at the BOTTOM of a loop to complete it (pure rolling).
+ * v²_bot = gR(5+c)/(1+c)
  */
 export function loopMinSpeed(radius, c) {
   return Math.sqrt(G * radius * (5 + c) / (1 + c));
 }
 
 /**
- * Minimum release height above the loop bottom to complete the loop.
- * Uses energy conservation with rolling: h_min = R(5+b)/2 where b = I/(mR²)
- * This is the key result from FRQ Problem 2.
+ * Minimum release height above loop bottom to complete the loop.
+ * h_min = R(5+b)/2 where b = I/(mR²)
  */
 export function loopMinHeight(radius, b) {
   return radius * (5 + b) / 2;

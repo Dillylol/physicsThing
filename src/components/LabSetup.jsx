@@ -3,7 +3,7 @@ import { SHAPES, COMPOUND_SHAPES, OBJECT_PRESETS } from '../physics/inertia';
 import { Settings2, Check, Layers, FlaskConical } from 'lucide-react';
 
 /**
- * Lab Setup Panel — Configure object type, mass, radius, friction.
+ * Lab Setup Panel — Configure object type, mass, radius.
  * Supports compound inertia mode (hoop/disk only) with center + 2 side objects.
  * Compound can be yoyo (sides smaller) or wheel (sides larger).
  */
@@ -206,18 +206,6 @@ export default function LabSetup({ setup, onChange }) {
             </div>
           </div>
         )}
-
-        {/* Friction */}
-        <div className="pt-3 border-t border-slate-800/50">
-          <SliderControl
-            label="Surface Friction"
-            value={setup.friction}
-            min={0} max={1} step={0.05}
-            unit=""
-            color="rose"
-            onChange={(v) => handleChange('friction', v)}
-          />
-        </div>
 
         {/* Show Forces */}
         <div className="pt-3 border-t border-slate-800/50">

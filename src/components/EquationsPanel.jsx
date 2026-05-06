@@ -24,12 +24,11 @@ export default function EquationsPanel({ simState, inertiaData, setup, track }) 
       totalInertia: inertiaData.totalInertia,
       effectiveC: inertiaData.effectiveC,
       rollRadius: inertiaData.rollRadius,
-      friction: setup.friction,
       track,
       distance: simState.distance || 0,
       initialHeight,
     });
-  }, [simState.distance, inertiaData, setup.friction, track, initialHeight]);
+  }, [simState.distance, inertiaData, track, initialHeight]);
 
   if (!physics) return null;
 
@@ -87,7 +86,7 @@ export default function EquationsPanel({ simState, inertiaData, setup, track }) 
             <EqRow label="mg sinθ (∥)" value={`${physics.F_gravity_parallel.toFixed(2)} N`} color="text-purple-300" />
             <EqRow label="mg cosθ (⊥)" value={`${physics.F_gravity_normal.toFixed(2)} N`} color="text-purple-300" />
             <EqRow label="Normal (N)" value={`${physics.F_normal.toFixed(2)} N`} color="text-cyan-400" />
-            <EqRow label="Friction (f)" value={`${physics.F_friction.toFixed(2)} N`} color="text-rose-400" />
+            <EqRow label="Friction (f = cma)" value={`${physics.F_friction.toFixed(2)} N`} color="text-rose-400" />
             {physics.F_centripetal > 0.01 && (
               <EqRow label="Centripetal (Fc)" value={`${physics.F_centripetal.toFixed(2)} N`} color="text-amber-400" />
             )}
@@ -95,14 +94,7 @@ export default function EquationsPanel({ simState, inertiaData, setup, track }) 
               <EqRow label="ΣF (net)" value={`${physics.F_net.toFixed(2)} N`} color="text-white" bold />
             </div>
           </div>
-          <div className={`mt-2 text-[11px] font-bold py-1 px-2 rounded flex items-center justify-center border ${
-            physics.isSlipping
-              ? 'bg-rose-500/20 text-rose-400 border-rose-500/50'
-              : 'bg-emerald-500/20 text-emerald-400 border-emerald-500/50'
-          }`}>
-            {physics.isSlipping ? '⚠ SLIDING' : '✓ PURE ROLLING'}
-          </div>
-          {!physics.isSlipping && Math.abs(physics.tangentAngle) > 0.02 && (
+          {Math.abs(physics.tangentAngle) > 0.02 && (
             <div className="mt-2 bg-slate-950 border border-slate-700 rounded p-2">
               <div className="text-[10px] font-semibold text-slate-400 mb-1">Rolling Acceleration (FRQ1)</div>
               <div className="text-[10px] font-mono text-slate-500 space-y-0.5">
@@ -124,8 +116,7 @@ export default function EquationsPanel({ simState, inertiaData, setup, track }) 
             τ = Iα = F·R
           </div>
           <div className="space-y-1.5">
-            <EqRow label="τ = Iα" value={`${physics.torque_Ia.toFixed(4)} N·m`} color="text-amber-400" />
-            <EqRow label="τ = FR" value={`${physics.torque_FR.toFixed(4)} N·m`} color="text-amber-300" />
+            <EqRow label="τ = fR = Iα" value={`${physics.torque.toFixed(4)} N·m`} color="text-amber-400" />
             <EqRow label="α (angular accel)" value={`${physics.angularAcceleration.toFixed(4)} rad/s²`} color="text-slate-300" />
             <EqRow label="a (linear accel)" value={`${physics.acceleration.toFixed(4)} m/s²`} color="text-slate-300" />
           </div>
