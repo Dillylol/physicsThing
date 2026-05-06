@@ -1,7 +1,7 @@
 /**
  * Inertia calculation module for single and compound objects.
  * 
- * Single mode: Solid Disk, Hollow Hoop, Solid Sphere, Hollow Sphere
+ * Single mode: Solid Disk, Solid Hoop, Solid Sphere, Hollow Sphere
  * Compound mode (Hoop/Disk only): 3-part coaxial system — center object + 2 side objects.
  *   - If side objects are larger → "wheel" shape (center hub with outer flanges)
  *   - If side objects are smaller → "yoyo" shape (large center, small side pieces)
@@ -18,13 +18,6 @@ export const SHAPES = {
     inertiaFormula: (m, r) => 0.5 * m * r * r,
   },
   hoop: {
-    name: 'Hollow Hoop',
-    c: 1.0,
-    color: '#ef4444',
-    desc: 'I = mR²',
-    inertiaFormula: (m, r) => m * r * r,
-  },
-  solid_hoop: {
     name: 'Solid Hoop',
     c: 1.0,
     color: '#f97316',
@@ -51,7 +44,6 @@ export const SHAPES = {
 export const COMPOUND_SHAPES = {
   solid_disk: SHAPES.solid_disk,
   hoop: SHAPES.hoop,
-  solid_hoop: SHAPES.solid_hoop,
 };
 
 /**

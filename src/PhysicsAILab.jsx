@@ -3,7 +3,7 @@ import { Play, Pause, RotateCcw, Settings2, Check, AlertTriangle, Calculator, Br
 
 const SHAPES = {
   solid_disk: { name: 'Solid Disk', c: 0.5, color: 0x3b82f6, hex: '#3b82f6', desc: 'Average Inertia' },
-  hoop: { name: 'Hollow Hoop', c: 1.0, color: 0xef4444, hex: '#ef4444', desc: 'High Inertia' },
+  hoop: { name: 'Solid Hoop', c: 1.0, color: 0xf97316, hex: '#f97316', desc: 'High Inertia' },
   solid_sphere: { name: 'Solid Sphere', c: 0.4, color: 0x10b981, hex: '#10b981', desc: 'Low Inertia' },
   hollow_sphere: { name: 'Hollow Sphere', c: 0.667, color: 0xf59e0b, hex: '#f59e0b', desc: 'Medium Inertia' },
 };
