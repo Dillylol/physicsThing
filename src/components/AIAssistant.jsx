@@ -11,23 +11,14 @@ const RAMP_LENGTH = 15;
  */
 export default function AIAssistant({ setup, inertiaData, simState, track }) {
   const [aiMemory, setAiMemory] = useState([]);
-  const [aiPrediction, setAiPrediction] = useState({ time: null, velocity: null, slip: null, efficiency: null, confidence: 0 });
+  const [aiPrediction, setAiPrediction] = useState({ time: null, velocity: null, efficiency: null, confidence: 0 });
   const [aiError, setAiError] = useState({ time: null });
   const [isTraining, setIsTraining] = useState(false);
 
-  // --- PHYSICS ENGINE (for training data generation) ---
-  const calculateFinalOutcomes = useCallback((m, r, ang, frict, shapeC) => {
+  // --- PHYSICS ENGINE (for training data generation, pure rolling) ---
+  const calculateFinalOutcomes = useCallback((m, r, ang, shapeC) => {
     const angleRad = (ang * Math.PI) / 180;
-    const muCrit = (shapeC / (1 + shapeC)) * Math.tan(angleRad);
-    const isSlipping = frict < muCrit;
-
-    let a;
-    if (isSlipping) {
-      a = G * (Math.sin(angleRad) - frict * Math.cos(angleRad));
-    } else {
-      a = (G * Math.sin(angleRad)) / (1 + shapeC);
-    }
-    a = Math.max(0.001, a);
+    const a = Math.max(0.001, (G * Math.sin(angleRad)) / (1 + shapeC));
 
     const trackLen = track?.totalLength || RAMP_LENGTH;
     const finalTime = Math.sqrt((2 * trackLen) / a);
@@ -35,7 +26,7 @@ export default function AIAssistant({ setup, inertiaData, simState, track }) {
     const initialEnergy = m * G * initialHeight;
     const finalVelocity = a * finalTime;
 
-    let alpha = isSlipping ? (frict * G * Math.cos(angleRad)) / (shapeC * r) : a / r;
+    const alpha = a / r;
     const finalOmega = alpha * finalTime;
 
     const finalKeTrans = 0.5 * m * finalVelocity * finalVelocity;
@@ -43,7 +34,7 @@ export default function AIAssistant({ setup, inertiaData, simState, track }) {
     const finalMechEnergy = finalKeTrans + finalKeRot;
     const efficiency = initialEnergy > 0 ? finalMechEnergy / initialEnergy : 1;
 
-    return { finalTime, finalVelocity, finalOmega, isSlipping, initialEnergy, efficiency };
+    return { finalTime, finalVelocity, finalOmega, initialEnergy, efficiency };
   }, [track]);
 
   // --- TRAIN AI ---
@@ -55,17 +46,14 @@ export default function AIAssistant({ setup, inertiaData, simState, track }) {
       const mSteps = [1, 5, 10, 15, 20];
       const rSteps = [0.5, 1.0, 1.5, 2.0];
       const angSteps = [5, 15, 25, 35, 45, 55];
-      const fSteps = [0.0, 0.25, 0.5, 0.75, 1.0];
 
       for (const m of mSteps) {
         for (const ang of angSteps) {
-          for (const frict of fSteps) {
-            for (const shape of shapeKeys) {
-              const r = rSteps[Math.floor(Math.random() * rSteps.length)];
-              const c = SHAPES[shape].c;
-              const outcomes = calculateFinalOutcomes(m, r, ang, frict, c);
-              memory.push({ conditions: [m, r, ang, frict, c], outcomes });
-            }
+          for (const shape of shapeKeys) {
+            const r = rSteps[Math.floor(Math.random() * rSteps.length)];
+            const c = SHAPES[shape].c;
+            const outcomes = calculateFinalOutcomes(m, r, ang, c);
+            memory.push({ conditions: [m, r, ang, c], outcomes });
           }
         }
       }
@@ -74,11 +62,10 @@ export default function AIAssistant({ setup, inertiaData, simState, track }) {
         const m = Math.random() * 19 + 1;
         const r = Math.random() * 1.5 + 0.5;
         const ang = Math.random() * 55 + 5;
-        const frict = Math.random();
         const shape = shapeKeys[Math.floor(Math.random() * shapeKeys.length)];
         const c = SHAPES[shape].c;
-        const outcomes = calculateFinalOutcomes(m, r, ang, frict, c);
-        memory.push({ conditions: [m, r, ang, frict, c], outcomes });
+        const outcomes = calculateFinalOutcomes(m, r, ang, c);
+        memory.push({ conditions: [m, r, ang, c], outcomes });
       }
       setAiMemory(memory);
       setIsTraining(false);
@@ -96,11 +83,10 @@ export default function AIAssistant({ setup, inertiaData, simState, track }) {
     // Estimate ramp angle from first segment
     const firstSeg = track?.segmentRanges?.[0];
     const ang = firstSeg?.params?.angleDeg || 30;
-    const frict = setup.friction;
 
-    const bounds = [{ min: 1, max: 20 }, { min: 0.5, max: 2 }, { min: 5, max: 60 }, { min: 0, max: 1 }, { min: 0.4, max: 1.0 }];
-    const featureWeights = [0.6, 0.8, 1.5, 1.2, 1.4];
-    const currentConditions = [m, r, ang, frict, c];
+    const bounds = [{ min: 1, max: 20 }, { min: 0.5, max: 2 }, { min: 5, max: 60 }, { min: 0.4, max: 1.0 }];
+    const featureWeights = [0.6, 0.8, 1.5, 1.4];
+    const currentConditions = [m, r, ang, c];
 
     const normalize = (val, i) => (val - bounds[i].min) / (bounds[i].max - bounds[i].min);
     const normCurrent = currentConditions.map(normalize);
@@ -123,12 +109,11 @@ export default function AIAssistant({ setup, inertiaData, simState, track }) {
     const avgTime = topK.reduce((sum, s, i) => sum + w[i] * s.outcomes.finalTime, 0);
     const avgVel = topK.reduce((sum, s, i) => sum + w[i] * s.outcomes.finalVelocity, 0);
     const avgEff = topK.reduce((sum, s, i) => sum + w[i] * s.outcomes.efficiency, 0);
-    const slipVotes = topK.reduce((sum, s, i) => sum + w[i] * (s.outcomes.isSlipping ? 1 : 0), 0);
 
     const avgDist = topK.reduce((s, x) => s + x.dist, 0) / K;
     const confidence = Math.min(1, Math.max(0, 1 - avgDist / 1.5));
 
-    setAiPrediction({ time: avgTime, velocity: avgVel, slip: slipVotes > 0.5, efficiency: avgEff, confidence });
+    setAiPrediction({ time: avgTime, velocity: avgVel, efficiency: avgEff, confidence });
     setAiError({ time: null });
   }, [setup, aiMemory, inertiaData, track]);
 
@@ -182,10 +167,6 @@ export default function AIAssistant({ setup, inertiaData, simState, track }) {
             <PredRow icon={<Timer className="w-4 h-4 mr-2 text-slate-500" />} label="Time" value={aiPrediction.time ? `${aiPrediction.time.toFixed(2)}s` : '...'} color="text-fuchsia-300" />
             <PredRow icon={<Activity className="w-4 h-4 mr-2 text-slate-500" />} label="Velocity" value={aiPrediction.velocity ? `${aiPrediction.velocity.toFixed(1)} m/s` : '...'} color="text-emerald-300" />
             <PredRow label="Efficiency" value={aiPrediction.efficiency != null ? `${(aiPrediction.efficiency * 100).toFixed(0)}%` : '...'} color="text-amber-300" />
-            <div className="flex justify-between items-center bg-slate-900 p-2 rounded">
-              <span className="text-sm text-slate-300">Slip?</span>
-              <span className={`text-xs font-bold px-2 py-0.5 rounded ${aiPrediction.slip ? 'bg-rose-500/20 text-rose-400' : 'bg-emerald-500/20 text-emerald-400'}`}>{aiPrediction.slip == null ? '...' : aiPrediction.slip ? 'YES' : 'NO'}</span>
-            </div>
           </div>
 
           {/* Results */}

@@ -20,7 +20,6 @@ export default function PhysicsAILab() {
     shapeKey: 'solid_disk',
     mass: 5,
     radius: 0.5,
-    friction: 0.8,
     showForces: true,
     isCompound: false,
     centerShape: 'solid_disk',
@@ -41,7 +40,7 @@ export default function PhysicsAILab() {
     distance: 0, velocity: 0, omega: 0, thetaRot: 0,
     time: 0, PE: 0, KE_trans: 0, KE_rot: 0, totalEnergy: 0,
     angularMomentum: 0, linearMomentum: 0,
-    isSlipping: false, acceleration: 0,
+    acceleration: 0,
     x: 0, y: 0, tangentAngle: 0, segmentType: 'ramp', curvature: 0,
     finished: false,
   });
@@ -75,7 +74,7 @@ export default function PhysicsAILab() {
       distance: 0, velocity: 0, omega: 0, thetaRot: 0,
       time: 0, PE, KE_trans: 0, KE_rot: 0, totalEnergy: PE,
       angularMomentum: 0, linearMomentum: 0,
-      isSlipping: false, acceleration: 0,
+      acceleration: 0,
       x: startPt?.x || 0, y: startPt?.y || 0,
       tangentAngle: startPt?.tangentAngle || 0,
       segmentType: startPt?.type || 'ramp', curvature: 0,
@@ -108,7 +107,6 @@ export default function PhysicsAILab() {
           totalInertia: inertiaData.totalInertia,
           effectiveC: inertiaData.effectiveC,
           rollRadius: inertiaData.rollRadius,
-          friction: setup.friction,
           track,
         });
 
@@ -122,7 +120,7 @@ export default function PhysicsAILab() {
     }
     prevTimeRef.current = timestamp;
     requestRef.current = requestAnimationFrame(animate);
-  }, [simSpeed, inertiaData, setup.friction, track]);
+  }, [simSpeed, inertiaData, track]);
 
   useEffect(() => {
     if (isPlaying) {
@@ -297,12 +295,8 @@ export default function PhysicsAILab() {
                       <span className="text-slate-400">L:</span>
                       <span className="font-mono text-fuchsia-400">{simState.angularMomentum?.toFixed(3) || '0'} kg·m²/s</span>
                     </div>
-                    <div className={`mt-1 text-[11px] font-bold py-1 px-2 rounded flex items-center justify-center border ${
-                      simState.isSlipping
-                        ? 'bg-rose-500/20 text-rose-400 border-rose-500/50'
-                        : 'bg-emerald-500/20 text-emerald-400 border-emerald-500/50'
-                    }`}>
-                      {simState.isSlipping ? '⚠ SLIDING' : '✓ PURE ROLLING'}
+                    <div className="mt-1 text-[11px] font-bold py-1 px-2 rounded flex items-center justify-center border bg-emerald-500/20 text-emerald-400 border-emerald-500/50">
+                      ✓ PURE ROLLING
                     </div>
                   </div>
                 </div>

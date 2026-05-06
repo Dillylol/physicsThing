@@ -86,7 +86,7 @@ export default function EquationsPanel({ simState, inertiaData, setup, track }) 
             <EqRow label="mg sinθ (∥)" value={`${physics.F_gravity_parallel.toFixed(2)} N`} color="text-purple-300" />
             <EqRow label="mg cosθ (⊥)" value={`${physics.F_gravity_normal.toFixed(2)} N`} color="text-purple-300" />
             <EqRow label="Normal (N)" value={`${physics.F_normal.toFixed(2)} N`} color="text-cyan-400" />
-            <EqRow label="Friction (f)" value={`${physics.F_friction.toFixed(2)} N`} color="text-rose-400" />
+            <EqRow label="Friction (f = cma)" value={`${physics.F_friction.toFixed(2)} N`} color="text-rose-400" />
             {physics.F_centripetal > 0.01 && (
               <EqRow label="Centripetal (Fc)" value={`${physics.F_centripetal.toFixed(2)} N`} color="text-amber-400" />
             )}
@@ -116,8 +116,7 @@ export default function EquationsPanel({ simState, inertiaData, setup, track }) 
             τ = Iα = F·R
           </div>
           <div className="space-y-1.5">
-            <EqRow label="τ = Iα" value={`${physics.torque_Ia.toFixed(4)} N·m`} color="text-amber-400" />
-            <EqRow label="τ = FR" value={`${physics.torque_FR.toFixed(4)} N·m`} color="text-amber-300" />
+            <EqRow label="τ = fR = Iα" value={`${physics.torque.toFixed(4)} N·m`} color="text-amber-400" />
             <EqRow label="α (angular accel)" value={`${physics.angularAcceleration.toFixed(4)} rad/s²`} color="text-slate-300" />
             <EqRow label="a (linear accel)" value={`${physics.acceleration.toFixed(4)} m/s²`} color="text-slate-300" />
           </div>
