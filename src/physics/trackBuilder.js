@@ -76,15 +76,17 @@ function loopPoints(radius, startX, startY) {
     const t = i / n;
     // Start at bottom (angle = -π/2), go clockwise
     const theta = -Math.PI / 2 + t * 2 * Math.PI;
+    // Normalize tangent angle to [-π, π] to prevent wrapping issues at loop exit
+    let tangent = theta + Math.PI / 2;
+    tangent = Math.atan2(Math.sin(tangent), Math.cos(tangent));
     points.push({
       x: cx + radius * Math.cos(theta),
       y: cy + radius * Math.sin(theta),
       dist: t * circumference,
-      // Tangent angle: perpendicular to radius, in direction of travel
-      angle: theta + Math.PI / 2,
+      angle: tangent,
       type: 'loop',
       curvature: 1 / radius,
-      loopAngle: t * 360, // degrees around the loop
+      loopAngle: t * 360,
     });
   }
   return points;
@@ -196,14 +198,18 @@ export function buildTrack(segments, rampThickness = 0.3) {
         const lastPt = allPoints[allPoints.length - 1];
         const firstPt = segPoints[0];
 
-        // Calculate tangent vectors from the angles
+        // Calculate tangent vectors from the angles (wrapped to [-π, π])
         const prevAngle = lastPt.angle || 0;
         const nextAngle = firstPt.angle || 0;
 
-        // Only add transition if there's an angle mismatch
-        const angleDiff = Math.abs(prevAngle - nextAngle);
-        if (angleDiff > 0.01) {
-          const transitionLen = Math.max(0.5, angleDiff * 2);
+        // Wrap angle difference to [-π, π] to avoid false transitions at 0/2π boundary
+        let angleDiff = prevAngle - nextAngle;
+        angleDiff = angleDiff - 2 * Math.PI * Math.round(angleDiff / (2 * Math.PI));
+        const absAngleDiff = Math.abs(angleDiff);
+
+        // Only add transition if there's a real angle mismatch
+        if (absAngleDiff > 0.01) {
+          const transitionLen = Math.max(0.5, absAngleDiff * 2);
           const t0 = { x: transitionLen * Math.cos(prevAngle), y: transitionLen * Math.sin(prevAngle) };
           const t1 = { x: transitionLen * Math.cos(nextAngle), y: transitionLen * Math.sin(nextAngle) };
           const transPoints = hermiteInterp(lastPt, firstPt, t0, t1, 12);
