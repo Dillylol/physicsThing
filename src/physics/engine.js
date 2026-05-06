@@ -256,13 +256,22 @@ function getTrackPosAtImport(track, dist) {
 }
 
 /**
- * Calculate the minimum speed needed to complete a loop at the top.
- * At the top: mg = mv²/r → v_top = √(gr)
- * At the bottom: ½mv²_bottom = ½mv²_top + mg(2r) → v_bottom = √(5gr)
- * With rotation: v_bottom = √(5gr / (1 + c)) ... approximately
+ * Calculate the minimum speed needed at the BOTTOM of a loop to complete it.
+ * At the top: mg = mv²/R → v²_top = gR (minimum condition)
+ * Energy conservation (bottom→top): ½mv²_bot(1+c) = ½mv²_top(1+c) + mg(2R)
+ * v²_bot = v²_top + 4gR/(1+c) = gR + 4gR/(1+c) = gR[(1+c+4)/(1+c)] = gR(5+c)/(1+c)
  */
 export function loopMinSpeed(radius, c) {
-  return Math.sqrt(5 * G * radius);
+  return Math.sqrt(G * radius * (5 + c) / (1 + c));
+}
+
+/**
+ * Minimum release height above the loop bottom to complete the loop.
+ * Uses energy conservation with rolling: h_min = R(5+b)/2 where b = I/(mR²)
+ * This is the key result from FRQ Problem 2.
+ */
+export function loopMinHeight(radius, b) {
+  return radius * (5 + b) / 2;
 }
 
 export { G };

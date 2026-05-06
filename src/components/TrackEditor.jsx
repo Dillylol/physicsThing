@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Waypoints, Plus, Trash2, ChevronUp, ChevronDown, Ruler } from 'lucide-react';
-import { segmentLabel } from '../physics/trackBuilder';
+import { Waypoints, Plus, Trash2, ChevronUp, ChevronDown, Ruler, BookOpen } from 'lucide-react';
+import { segmentLabel, TRACK_PRESETS } from '../physics/trackBuilder';
 
 /**
  * Track Editor Panel — Add, remove, reorder track segments.
@@ -44,6 +44,25 @@ export default function TrackEditor({ segments, onSegmentsChange, trackWidth, on
       <h2 className="text-lg font-semibold text-slate-100 flex items-center mb-4">
         <Waypoints className="w-5 h-5 mr-2 text-emerald-400" /> Track Editor
       </h2>
+
+      {/* Track Presets */}
+      <div className="mb-4 p-3 bg-slate-950 rounded-lg border border-slate-800">
+        <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider flex items-center mb-2">
+          <BookOpen className="w-3.5 h-3.5 mr-1" /> Presets (FRQ Scenarios)
+        </label>
+        <div className="space-y-1.5">
+          {Object.entries(TRACK_PRESETS).map(([key, preset]) => (
+            <button
+              key={key}
+              onClick={() => onSegmentsChange([...preset.segments])}
+              className="w-full text-left px-3 py-2 rounded-lg border border-slate-700 bg-slate-800/50 text-slate-300 hover:bg-slate-800 hover:border-emerald-500/50 transition-all text-sm"
+            >
+              <span className="font-medium">{preset.name}</span>
+              <span className="block text-[10px] text-slate-500 mt-0.5">{preset.desc}</span>
+            </button>
+          ))}
+        </div>
+      </div>
 
       {/* Track Width (Binary Toggle) */}
       <div className="mb-4 p-3 bg-slate-950 rounded-lg border border-slate-800">

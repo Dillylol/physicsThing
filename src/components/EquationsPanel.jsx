@@ -102,6 +102,20 @@ export default function EquationsPanel({ simState, inertiaData, setup, track }) 
           }`}>
             {physics.isSlipping ? '⚠ SLIDING' : '✓ PURE ROLLING'}
           </div>
+          {!physics.isSlipping && Math.abs(physics.tangentAngle) > 0.02 && (
+            <div className="mt-2 bg-slate-950 border border-slate-700 rounded p-2">
+              <div className="text-[10px] font-semibold text-slate-400 mb-1">Rolling Acceleration (FRQ1)</div>
+              <div className="text-[10px] font-mono text-slate-500 space-y-0.5">
+                <div>F = ma: mg sinθ − f = ma</div>
+                <div>τ = Iα: f·R = I(a/R) → f = (I/R²)a = cma</div>
+                <div className="text-emerald-400">a = g sinθ / (1 + c)</div>
+                <div className="text-slate-600">
+                  = {G.toFixed(2)} × sin({(Math.abs(physics.tangentAngle) * 180 / Math.PI).toFixed(1)}°) / (1 + {inertiaData.effectiveC.toFixed(3)})
+                  = {(G * Math.sin(Math.abs(physics.tangentAngle)) / (1 + inertiaData.effectiveC)).toFixed(4)} m/s²
+                </div>
+              </div>
+            </div>
+          )}
         </EquationSection>
 
         {/* --- Torque --- */}
@@ -118,13 +132,24 @@ export default function EquationsPanel({ simState, inertiaData, setup, track }) 
         </EquationSection>
 
         {/* --- Angular Momentum --- */}
-        <EquationSection title="Momentum" icon={<Gauge className="w-4 h-4" />} color="fuchsia">
+        <EquationSection title="Angular Momentum" icon={<Gauge className="w-4 h-4" />} color="fuchsia">
           <div className="text-center font-mono text-sm text-slate-400 mb-2 bg-slate-950 p-2 rounded">
             L = Iω &nbsp;|&nbsp; p = mv
           </div>
           <div className="space-y-1.5">
             <EqRow label="L (angular)" value={`${physics.angularMomentum.toFixed(4)} kg·m²/s`} color="text-fuchsia-400" />
             <EqRow label="p (linear)" value={`${physics.linearMomentum.toFixed(4)} kg·m/s`} color="text-cyan-400" />
+          </div>
+          <div className="mt-2 bg-rose-950/30 border border-rose-500/20 rounded p-2">
+            <div className="text-[11px] font-semibold text-rose-400 mb-1">Is L conserved? NO</div>
+            <div className="text-[10px] text-slate-500 space-y-0.5">
+              <div>Friction exerts an external torque on the object:</div>
+              <div className="font-mono text-slate-400">τ<sub>net</sub> = f·R ≠ 0</div>
+              <div>Since ω increases as the object accelerates down the incline, L = Iω is <span className="text-amber-400">not conserved</span>.</div>
+              <div className="text-slate-600 mt-1">
+                (Angular momentum would be conserved only if Σ τ<sub>ext</sub> = 0)
+              </div>
+            </div>
           </div>
         </EquationSection>
 
