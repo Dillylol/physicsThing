@@ -207,18 +207,6 @@ export default function LabSetup({ setup, onChange }) {
           </div>
         )}
 
-        {/* Friction */}
-        <div className="pt-3 border-t border-slate-800/50">
-          <SliderControl
-            label="Surface Friction"
-            value={setup.friction}
-            min={0} max={1} step={0.05}
-            unit=""
-            color="rose"
-            onChange={(v) => handleChange('friction', v)}
-          />
-        </div>
-
         {/* Show Forces */}
         <div className="pt-3 border-t border-slate-800/50">
           <label className="flex items-center space-x-3 cursor-pointer">
